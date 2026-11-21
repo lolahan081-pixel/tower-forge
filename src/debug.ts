@@ -15,6 +15,10 @@ export type UiRects = {
   enterBreach?: UiRect;
   tabLoadout?: UiRect;
   tabLattice?: UiRect;
+  tabForge?: UiRect;
+  forgeRelics?: UiRect[];
+  forgeCurrencies?: UiRect[];
+  forgeApply?: UiRect;
   unsocket?: UiRect;
   runeSockets?: UiRect[];
   relics?: UiRect[];
@@ -34,7 +38,7 @@ export type UiRects = {
 export type HubSnapshot = {
   ready: boolean;
   scene: "bastion";
-  tab: "loadout" | "lattice";
+  tab: "loadout" | "forge" | "lattice";
   selected: string;
   helpVisible: boolean;
   runeInventory: GemSnap[];
@@ -90,6 +94,7 @@ export type TowerForgeDebug = {
   getSpoils?: () => unknown[];
   collectSpoils?: () => void;
   giveRelic?: (defId?: string, rarity?: "normal" | "magic" | "rare") => unknown;
+  giveCurrency?: (id: string, qty?: number) => void;
   guaranteeDrop?: (kind?: "off" | "relic" | "rune" | "sigil" | "currency") => void;
   shopOffers?: () => unknown[];
   buyShop?: (index: number) => boolean;

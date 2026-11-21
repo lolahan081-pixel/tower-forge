@@ -17,12 +17,13 @@ import { resolveLoadout, runeMatchesSigil, type ResolvedAttack } from "../data/s
 import { TOWERS, TOWER_IDS, type TowerId } from "../data/towers";
 import { Palette } from "../palette";
 import type { HubSnapshot, UiRects } from "../debug";
+import { ForgePanel } from "./ForgePanel";
 import { HelpOverlay } from "./HelpOverlay";
 import { gemColor, gemName, itemColor } from "./gems";
 import { generateTextures } from "./textures";
 import { BTN_H, containsRect, FONT_BODY, FONT_BTN, FONT_BTN_SM, FONT_HUD, FONT_TITLE, type UiRect } from "./ui";
 
-type Tab = "loadout" | "lattice";
+type Tab = "loadout" | "forge" | "lattice";
 
 type SlotView = { box: Phaser.GameObjects.Rectangle; chip: Phaser.GameObjects.Rectangle; label: Phaser.GameObjects.Text; rect: UiRect };
 type InvView = SlotView;
@@ -38,11 +39,12 @@ export class BastionScene extends Phaser.Scene {
 
   private loadoutRoot!: Phaser.GameObjects.Container;
   private latticeRoot!: Phaser.GameObjects.Container;
+  private forge!: ForgePanel;
   private hint!: Phaser.GameObjects.Text;
   private statsText!: Phaser.GameObjects.Text;
   private sigilLabel!: Phaser.GameObjects.Text;
   private towerMarks: Phaser.GameObjects.Rectangle[] = [];
-  private tabMarks: { loadout: Phaser.GameObjects.Rectangle; lattice: Phaser.GameObjects.Rectangle } | null = null;
+  private tabMarks: { loadout: Phaser.GameObjects.Rectangle; forge: Phaser.GameObjects.Rectangle; lattice: Phaser.GameObjects.Rectangle } | null = null;
   private runeViews: SlotView[] = [];
   private relicViews: SlotView[] = [];
   private invViews: InvView[] = [];
@@ -52,6 +54,7 @@ export class BastionScene extends Phaser.Scene {
   private enterRect!: UiRect;
   private tabLoadoutRect!: UiRect;
   private tabLatticeRect!: UiRect;
+  private tabForgeRect!: UiRect;
   private unsocketRect!: UiRect;
   private towerRects: Record<string, UiRect> = {};
   private invRunesRect!: UiRect;
@@ -92,17 +95,25 @@ export class BastionScene extends Phaser.Scene {
     this.makeButton(enterX, enterY, enterW, BTN_H, "ENTER BREACH", true);
 
     const tabY = 16 + BTN_H + 16;
-    const tabW = 240;
+    const tabW = 200;
     this.tabLoadoutRect = { x: 24, y: tabY, w: tabW, h: BTN_H };
-    this.tabLatticeRect = { x: 24 + tabW + 12, y: tabY, w: tabW, h: BTN_H };
+    this.tabForgeRect = { x: 24 + tabW + 12, y: tabY, w: tabW, h: BTN_H };
+    this.tabLatticeRect = { x: 24 + 2 * (tabW + 12), y: tabY, w: tabW, h: BTN_H };
     this.makeButton(this.tabLoadoutRect.x, tabY, tabW, BTN_H, "LOADOUT", false);
-    this.makeButton(this.tabLatticeRect.x, tabY, tabW, BTN_H, "EMBER LATTICE", false);
+    this.makeButton(this.tabForgeRect.x, tabY, tabW, BTN_H, "FORGE", false);
+    this.makeButton(this.tabLatticeRect.x, tabY, tabW, BTN_H, "LATTICE", false);
     this.tabMarks = {
       loadout: this.add
         .rectangle(this.tabLoadoutRect.x + tabW / 2, tabY + BTN_H / 2, tabW, BTN_H)
         .setStrokeStyle(3, Palette.gold)
         .setFillStyle(0, 0)
         .setDepth(6),
+      forge: this.add
+        .rectangle(this.tabForgeRect.x + tabW / 2, tabY + BTN_H / 2, tabW, BTN_H)
+        .setStrokeStyle(3, Palette.gold)
+        .setFillStyle(0, 0)
+        .setDepth(6)
+        .setVisible(false),
       lattice: this.add
         .rectangle(this.tabLatticeRect.x + tabW / 2, tabY + BTN_H / 2, tabW, BTN_H)
         .setStrokeStyle(3, Palette.gold)
@@ -112,6 +123,7 @@ export class BastionScene extends Phaser.Scene {
     };
 
     this.buildLoadout();
+    this.forge = new ForgePanel(this);
     this.buildLattice();
 
     this.help = new HelpOverlay(this, () => undefined, "bastion");
@@ -373,9 +385,18 @@ export class BastionScene extends Phaser.Scene {
       this.refresh();
       return;
     }
+    if (containsRect(this.tabForgeRect, x, y)) {
+      this.tab = "forge";
+      this.refresh();
+      return;
+    }
     if (containsRect(this.tabLatticeRect, x, y)) {
       this.tab = "lattice";
       this.refresh();
+      return;
+    }
+    if (this.tab === "forge") {
+      this.forge.handleTap(x, y);
       return;
     }
     if (this.tab !== "loadout") return;
@@ -490,10 +511,15 @@ export class BastionScene extends Phaser.Scene {
 
   private refresh(): void {
     const onLoadout = this.tab === "loadout";
+    const onForge = this.tab === "forge";
+    const onLattice = this.tab === "lattice";
     this.loadoutRoot.setVisible(onLoadout);
-    this.latticeRoot.setVisible(!onLoadout);
+    this.forge.root.setVisible(onForge);
+    this.latticeRoot.setVisible(onLattice);
     this.tabMarks?.loadout.setVisible(onLoadout);
-    this.tabMarks?.lattice.setVisible(!onLoadout);
+    this.tabMarks?.forge.setVisible(onForge);
+    this.tabMarks?.lattice.setVisible(onLattice);
+    if (onForge) this.forge.refresh();
     if (!onLoadout) return;
 
     const def = TOWERS[this.selected];
@@ -671,7 +697,11 @@ export class BastionScene extends Phaser.Scene {
       helpDismiss: this.help.dismissRect(),
       enterBreach: this.enterRect,
       tabLoadout: this.tabLoadoutRect,
+      tabForge: this.tabForgeRect,
       tabLattice: this.tabLatticeRect,
+      forgeRelics: this.forge.root.visible ? this.forge.relicRects() : [],
+      forgeCurrencies: this.forge.root.visible ? this.forge.currencyRects() : [],
+      forgeApply: this.forge.applyRect,
       unsocket: this.unsocketRect,
       towers: this.towerRects,
       runeSockets: runeRects,
@@ -707,6 +737,12 @@ export class BastionScene extends Phaser.Scene {
         persistProfile();
         this.refresh();
         return relic;
+      },
+      giveCurrency: (id: string, qty = 1) => {
+        const profile = getProfile();
+        if (id in profile.currency) profile.currency[id as keyof typeof profile.currency] += qty;
+        persistProfile();
+        this.refresh();
       },
       getProfile: () => getProfile(),
       forceOutcome: () => undefined,
