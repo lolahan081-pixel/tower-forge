@@ -1,6 +1,6 @@
 # Tower Forge
 
-A small browser tower defense game (Phaser 3 + Vite + TypeScript). See `DESIGN.md` for the brief and `TODO.md` for what comes after the core loop.
+The Ashen Bastion, a small browser tower defense game (Phaser 3 + Vite + TypeScript). See `DESIGN.md` and `TODO.md`.
 
 ```bash
 npm install
@@ -8,7 +8,9 @@ npm run dev
 ```
 
 - `1` / `2` — select Ember Spire or Blood Font
-- Click a stone (non-path) cell to build, if you can afford it
-- `SPACE` or the START WAVE button — send the next wave
+- Click a stone (non-path) cell to plant a frame
+- Click a placed frame to open its Inscription: socket a Sigil and Runes from your inventory
+- A frame does not attack until it holds a Sigil
+- `SPACE` or START WAVE — send the next wave
 
 `npm run build` type-checks and bundles to `dist/`.

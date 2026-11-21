@@ -1,17 +1,17 @@
 import type { StatBlock } from "./stats";
+import type { FrameTag } from "./tags";
 
 export type TowerId = "ember-spire" | "blood-font";
-
-export type FireMode = "projectile" | "instant";
 
 export type TowerDef = {
   id: TowerId;
   name: string;
   cost: number;
+  /** Socket count on this frame (2–6). All sockets form one Inscription. */
+  sockets: number;
+  /** Base stats. Unused until a Sigil is inscribed. */
   stats: StatBlock;
-  fire: FireMode;
-  /** Pixels per second. Unused for instant hits. */
-  projectileSpeed: number;
+  tags: readonly FrameTag[];
   color: number;
   accent: number;
 };
@@ -21,9 +21,9 @@ export const TOWERS: Record<TowerId, TowerDef> = {
     id: "ember-spire",
     name: "Ember Spire",
     cost: 40,
+    sockets: 3,
     stats: { damage: 8, attackRate: 1.35, range: 140 },
-    fire: "projectile",
-    projectileSpeed: 420,
+    tags: ["projectile"],
     color: 0x2a2420,
     accent: 0xc4451c,
   },
@@ -31,9 +31,9 @@ export const TOWERS: Record<TowerId, TowerDef> = {
     id: "blood-font",
     name: "Blood Font",
     cost: 75,
-    stats: { damage: 22, attackRate: 0.7, range: 120 },
-    fire: "instant",
-    projectileSpeed: 0,
+    sockets: 4,
+    stats: { damage: 14, attackRate: 0.7, range: 120 },
+    tags: ["spell"],
     color: 0x1c1214,
     accent: 0x8b1a1a,
   },

@@ -1,4 +1,4 @@
-/** Dark fantasy, PoE-like palette. All colors are simple shape fills — no external art. */
+/** The Ashen Bastion: near-black charcoal, dim stone, ember / blood / gold. Simple shape fills only. */
 export const Palette = {
   ground: 0x0b0a0c,
   groundAlt: 0x121116,
@@ -15,6 +15,11 @@ export const Palette = {
   emberHot: 0xe86a2a,
   blood: 0x8b1a1a,
   bloodBright: 0xc42222,
+  cold: 0x6a9bb8,
+  coldBright: 0x9fd0e8,
+  lightning: 0xc8b44a,
+  panel: 0x121016,
+  panelEdge: 0x3a3228,
   text: 0xe8e0d4,
   muted: 0x8a8490,
   danger: 0xd4544a,

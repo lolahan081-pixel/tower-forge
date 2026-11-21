@@ -1,0 +1,138 @@
+{
+  "url": "http://127.0.0.1:4173/?renderer=canvas",
+  "screenshot": "/workspace/tower-forge/screenshots/sigils.png",
+  "screenshotBytes": 52953,
+  "cell": {
+    "col": 3,
+    "row": 5
+  },
+  "placed": true,
+  "socketSigil": true,
+  "socketRune": true,
+  "panelOpen": true,
+  "started": true,
+  "resolved": {
+    "damage": 12,
+    "attackRate": 1.35,
+    "range": 140,
+    "behaviour": "projectile",
+    "sigilId": "cinder-orb",
+    "projectileCount": 3,
+    "projectileSpeed": 420,
+    "chainCount": 0,
+    "pierceCount": 0,
+    "novaRadius": 0,
+    "convertToCold": 0,
+    "texture": "cinder-orb"
+  },
+  "afterSocketTowers": [
+    {
+      "col": 3,
+      "row": 5,
+      "sockets": [
+        {
+          "uid": "sig_1_8f15b076-b03a-42f3-bb3a-596673aa95fb",
+          "defId": "cinder-orb",
+          "kind": "sigil",
+          "level": 1,
+          "xp": 0
+        },
+        {
+          "uid": "run_5_f81f162e-01fe-4db8-8670-9c97da85cd0b",
+          "defId": "split-volley",
+          "kind": "rune",
+          "level": 1,
+          "xp": 0
+        },
+        null
+      ],
+      "resolved": {
+        "damage": 12,
+        "attackRate": 1.35,
+        "range": 140,
+        "behaviour": "projectile",
+        "sigilId": "cinder-orb",
+        "projectileCount": 3,
+        "projectileSpeed": 420,
+        "chainCount": 0,
+        "pierceCount": 0,
+        "novaRadius": 0,
+        "convertToCold": 0,
+        "texture": "cinder-orb"
+      }
+    }
+  ],
+  "mid": {
+    "gold": 88,
+    "lives": 20,
+    "wave": 1,
+    "enemiesAlive": 2,
+    "projectiles": 4,
+    "lastVolleyCount": 3,
+    "peakProjectiles": 7,
+    "fps": 59.1,
+    "panelOpen": true
+  },
+  "late": {
+    "gold": 102,
+    "lives": 20,
+    "enemiesAlive": 0,
+    "lastVolleyCount": 3,
+    "peakProjectiles": 7,
+    "fps": 60.3,
+    "sockets": [
+      {
+        "col": 3,
+        "row": 5,
+        "sockets": [
+          {
+            "uid": "sig_1_8f15b076-b03a-42f3-bb3a-596673aa95fb",
+            "defId": "cinder-orb",
+            "kind": "sigil",
+            "level": 2,
+            "xp": 26
+          },
+          {
+            "uid": "run_5_f81f162e-01fe-4db8-8670-9c97da85cd0b",
+            "defId": "split-volley",
+            "kind": "rune",
+            "level": 2,
+            "xp": 26
+          },
+          null
+        ],
+        "resolved": {
+          "damage": 13.440000000000001,
+          "attackRate": 1.35,
+          "range": 140,
+          "behaviour": "projectile",
+          "sigilId": "cinder-orb",
+          "projectileCount": 3,
+          "projectileSpeed": 420,
+          "chainCount": 0,
+          "pierceCount": 0,
+          "novaRadius": 0,
+          "convertToCold": 0,
+          "texture": "cinder-orb"
+        }
+      }
+    ]
+  },
+  "xpBefore": 0,
+  "xpAfter": 2052,
+  "multiProj": true,
+  "xpUp": true,
+  "goldUp": true,
+  "peak": 7,
+  "lastVolley": 3,
+  "stress": {
+    "spawned": 300,
+    "fps": 60.3
+  },
+  "afterStress": {
+    "enemiesAlive": 295,
+    "fps": 53
+  },
+  "console": [],
+  "pageErrors": []
+}

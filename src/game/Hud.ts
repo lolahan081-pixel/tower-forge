@@ -31,7 +31,7 @@ export class Hud {
     this.livesText = scene.add.text(170, HUD_Y + 12, "", style).setDepth(20);
     this.waveText = scene.add.text(310, HUD_Y + 12, "", style).setDepth(20);
     scene.add
-      .text(16, HUD_Y + 42, "1 Ember Spire   2 Blood Font   SPACE start wave   Click a stone cell to build", {
+      .text(16, HUD_Y + 42, "1 Ember Spire   2 Blood Font   SPACE start wave   Click a frame to inscribe", {
         font: FONT_SMALL,
         color: "#8a8490",
       })

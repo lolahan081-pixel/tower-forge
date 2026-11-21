@@ -1,4 +1,8 @@
-/** Combat stats a tower uses after any future modifiers (gems, supports, affixes). */
+import { isRuneId, RUNES } from "./runes";
+import { isSigilId, SIGILS, type SigilBehaviour, type SigilId } from "./sigils";
+import { addGemXp, sigilDamageScale, type GemInstance } from "./items";
+import type { TowerDef } from "./towers";
+
 export type StatBlock = {
   damage: number;
   /** Attacks per second. */
@@ -7,11 +11,118 @@ export type StatBlock = {
   range: number;
 };
 
+export type ResolvedAttack = StatBlock & {
+  behaviour: SigilBehaviour | "none";
+  sigilId: SigilId | null;
+  projectileCount: number;
+  projectileSpeed: number;
+  chainCount: number;
+  pierceCount: number;
+  novaRadius: number;
+  /** 0–1 fraction of damage treated as cold (tint / later resists). */
+  convertToCold: number;
+  texture: string;
+};
+
+export const INERT_ATTACK: ResolvedAttack = {
+  damage: 0,
+  attackRate: 0,
+  range: 0,
+  behaviour: "none",
+  sigilId: null,
+  projectileCount: 0,
+  projectileSpeed: 0,
+  chainCount: 0,
+  pierceCount: 0,
+  novaRadius: 0,
+  convertToCold: 0,
+  texture: "cinder-orb",
+};
+
+/** A Rune applies only when every one of its tags is present on the Sigil. */
+export function runeMatchesSigil(sigilTags: readonly string[], runeTags: readonly string[]): boolean {
+  for (let i = 0; i < runeTags.length; i++) {
+    const tag = runeTags[i];
+    if (tag === undefined) continue;
+    if (!sigilTags.includes(tag)) return false;
+  }
+  return true;
+}
+
+export function sigilFitsFrame(sigilTags: readonly string[], frameTags: readonly string[]): boolean {
+  for (let i = 0; i < frameTags.length; i++) {
+    const tag = frameTags[i];
+    if (tag !== undefined && sigilTags.includes(tag)) return true;
+  }
+  return false;
+}
+
 /**
- * Resolve the stats a tower actually fights with.
- * Later this is the single place gems, supports, and affixes will modify numbers.
- * For the core loop it is a straight copy of the base block.
+ * Resolve what a frame actually fires.
+ * Later Relics and Ember Lattice nodes also fold into this function.
  */
-export function resolveStats(base: StatBlock): StatBlock {
-  return { damage: base.damage, attackRate: base.attackRate, range: base.range };
+export function resolveAttack(frame: TowerDef, sockets: readonly (GemInstance | null)[]): ResolvedAttack {
+  let sigil: GemInstance | null = null;
+  for (let i = 0; i < sockets.length; i++) {
+    const g = sockets[i];
+    if (g && g.kind === "sigil") {
+      sigil = g;
+      break;
+    }
+  }
+  if (!sigil || !isSigilId(sigil.defId)) return { ...INERT_ATTACK, range: frame.stats.range };
+
+  const sdef = SIGILS[sigil.defId];
+  if (!sigilFitsFrame(sdef.tags, frame.tags)) return { ...INERT_ATTACK, range: frame.stats.range };
+
+  const scale = sigilDamageScale(sigil.level);
+  let damage = (frame.stats.damage + sdef.baseDamage) * scale;
+  let attackRate = frame.stats.attackRate;
+  const range = frame.stats.range;
+  let projectileCount = 1;
+  let chainCount = sdef.chainCount;
+  let pierceCount = sdef.pierceCount;
+  let convertToCold = 0;
+  const projectileSpeed = sdef.projectileSpeed;
+  const novaRadius = sdef.novaRadius;
+
+  for (let i = 0; i < sockets.length; i++) {
+    const g = sockets[i];
+    if (!g || g.kind !== "rune" || !isRuneId(g.defId)) continue;
+    const rdef = RUNES[g.defId];
+    if (!runeMatchesSigil(sdef.tags, rdef.tags)) continue;
+    const m = rdef.modifiers;
+    projectileCount += m.addProjectiles;
+    damage *= m.damageMult;
+    chainCount += m.addChain;
+    pierceCount += m.addPierce;
+    attackRate *= m.attackRateMult;
+    convertToCold = Math.min(1, convertToCold + m.convertToCold);
+  }
+
+  return {
+    damage,
+    attackRate,
+    range,
+    behaviour: sdef.behaviour,
+    sigilId: sdef.id,
+    projectileCount: Math.max(1, projectileCount),
+    projectileSpeed,
+    chainCount: Math.max(0, chainCount),
+    pierceCount: Math.max(0, pierceCount),
+    novaRadius,
+    convertToCold,
+    texture: convertToCold >= 0.25 ? "frost-bolt" : sdef.texture,
+  };
+}
+
+export function grantSocketXp(sockets: readonly (GemInstance | null)[], amount: number): boolean {
+  let changed = false;
+  for (let i = 0; i < sockets.length; i++) {
+    const g = sockets[i];
+    if (!g) continue;
+    if (addGemXp(g, amount)) changed = true;
+    else if (amount > 0) changed = true;
+  }
+  return changed;
 }
