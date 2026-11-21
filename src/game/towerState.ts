@@ -13,4 +13,5 @@ export type PlacedTower = {
   cooldown: number;
   sprite: Phaser.GameObjects.Image;
   rangeGfx: Phaser.GameObjects.Graphics;
+  badge: Phaser.GameObjects.Image;
 };

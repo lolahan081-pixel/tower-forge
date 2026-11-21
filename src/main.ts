@@ -5,7 +5,6 @@ import "./debug";
 
 const params = new URLSearchParams(window.location.search);
 const canvasRequested = params.get("renderer") === "canvas";
-
 const config: Phaser.Types.Core.GameConfig = {
   type: canvasRequested ? Phaser.CANVAS : Phaser.AUTO,
   parent: "app",
@@ -18,6 +17,14 @@ const config: Phaser.Types.Core.GameConfig = {
   render: {
     antialias: true,
     powerPreference: "high-performance",
+    roundPixels: true,
+    pixelArt: false,
+  },
+  scale: {
+    mode: Phaser.Scale.FIT,
+    autoCenter: Phaser.Scale.CENTER_BOTH,
+    width: GAME_WIDTH,
+    height: GAME_HEIGHT,
   },
 };
 

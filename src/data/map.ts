@@ -3,7 +3,7 @@ export type GridPos = { col: number; row: number };
 export const TILE_SIZE = 48;
 export const MAP_COLS = 20;
 export const MAP_ROWS = 14;
-export const HUD_HEIGHT = 72;
+export const HUD_HEIGHT = 120;
 export const GAME_WIDTH = MAP_COLS * TILE_SIZE;
 export const GAME_HEIGHT = MAP_ROWS * TILE_SIZE + HUD_HEIGHT;
 

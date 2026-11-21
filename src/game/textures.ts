@@ -102,5 +102,16 @@ export function generateTextures(scene: Phaser.Scene): void {
   g.generateTexture("gem-chip", 22, 22);
   g.clear();
 
+  // Empty-frame warning badge.
+  g.fillStyle(0x1a1210, 1);
+  g.fillCircle(12, 12, 11);
+  g.lineStyle(2, 0xc9a227, 1);
+  g.strokeCircle(12, 12, 10);
+  g.fillStyle(0xe8c547, 1);
+  g.fillRect(11, 5, 2, 8);
+  g.fillCircle(12, 17, 1.5);
+  g.generateTexture("no-sigil", 24, 24);
+  g.clear();
+
   g.destroy();
 }

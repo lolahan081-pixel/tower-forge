@@ -1,7 +1,9 @@
 import Phaser from "phaser";
 import { ENEMIES, type EnemyId } from "../data/enemies";
-import { type GemInstance } from "../data/items";
+import { makeGem, type GemInstance } from "../data/items";
 import {
+  GAME_HEIGHT,
+  GAME_WIDTH,
   MAP_COLS,
   MAP_ROWS,
   STARTING_GOLD,
@@ -20,6 +22,7 @@ import { EnemyPool, type Enemy } from "../sim/EnemyPool";
 import { PATH } from "../sim/path";
 import { BeamPool, NovaPool, ProjectilePool } from "../sim/ProjectilePool";
 import { WaveController } from "../sim/WaveController";
+import { HelpOverlay } from "./HelpOverlay";
 import { Hud, pointerToCell } from "./Hud";
 import { createStarterInventory, TowerPanel } from "./TowerPanel";
 import { drawBoard } from "./drawMap";
@@ -45,6 +48,7 @@ export type GameSnapshot = {
   outcome: Outcome;
   selected: TowerId;
   panelOpen: boolean;
+  helpVisible: boolean;
   inventory: GemSnap[];
   towerSockets: {
     col: number;
@@ -69,6 +73,8 @@ export class GameScene extends Phaser.Scene {
   private waves = new WaveController();
   private hud!: Hud;
   private panel!: TowerPanel;
+  private help!: HelpOverlay;
+  private lastTower: PlacedTower | null = null;
   private hover!: Phaser.GameObjects.Rectangle;
   private rangePreview!: Phaser.GameObjects.Graphics;
   private hudDirty = true;
@@ -110,7 +116,14 @@ export class GameScene extends Phaser.Scene {
       () => {
         this.tryStartWave();
       },
+      () => {
+        this.openInscribe();
+      },
     );
+
+    this.help = new HelpOverlay(this, () => {
+      this.hudDirty = true;
+    });
 
     this.panel = new TowerPanel(this, {
       inventory: () => this.inventory,
@@ -123,16 +136,29 @@ export class GameScene extends Phaser.Scene {
     });
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
       if (pointer.rightButtonDown()) return;
+      if (this.help.visible) {
+        this.help.handleTap(pointer.worldX, pointer.worldY);
+        return;
+      }
+      if (this.panel.visible) {
+        this.panel.handleTap(pointer.worldX, pointer.worldY);
+        return;
+      }
       if (this.hud.isOverHud(pointer.worldY)) return;
-      if (this.panel.contains(pointer.worldX, pointer.worldY)) return;
       const cell = pointerToCell(pointer.worldX, pointer.worldY);
       const existing = this.towerAt(cell.col, cell.row);
       if (existing) {
+        this.lastTower = existing;
         this.panel.show(existing);
         return;
       }
-      if (this.panel.visible) this.panel.hide();
-      this.tryBuild(cell.col, cell.row, this.selected);
+      if (this.tryBuild(cell.col, cell.row, this.selected)) {
+        const built = this.towerAt(cell.col, cell.row);
+        if (built) {
+          this.lastTower = built;
+          this.panel.show(built);
+        }
+      }
     });
 
     this.input.keyboard?.on("keydown-ONE", () => {
@@ -152,9 +178,19 @@ export class GameScene extends Phaser.Scene {
 
     this.hud.refresh(this.hudArgs());
     this.exposeDebugHook();
+    if (this.help.shouldShow()) this.help.show();
+    else this.help.hide();
   }
 
-  update(_time: number, delta: number): void {
+  private openInscribe(): void {
+    if (this.help.visible) return;
+    const tower = this.lastTower ?? this.towers[this.towers.length - 1];
+    if (!tower) return;
+    this.panel.show(tower);
+  }
+
+
+  update(time: number, delta: number): void {
     const dtMs = delta;
     const dtSec = dtMs * 0.001;
     const instantFps = this.game.loop.actualFps;
@@ -181,6 +217,12 @@ export class GameScene extends Phaser.Scene {
       this.novas.step(dtSec);
     }
 
+    const pulse = 0.55 + 0.45 * Math.sin(time / 180);
+    for (let i = 0; i < this.towers.length; i++) {
+      const tw = this.towers[i];
+      if (tw && tw.badge.visible) tw.badge.setAlpha(pulse);
+    }
+
     if (this.hudDirty) {
       this.hud.refresh(this.hudArgs());
       this.hudDirty = false;
@@ -198,12 +240,14 @@ export class GameScene extends Phaser.Scene {
     const { x, y } = cellCenter(col, row);
     const sockets: (GemInstance | null)[] = [];
     for (let i = 0; i < def.sockets; i++) sockets.push(null);
+    sockets[0] = makeGem("sigil", def.starterSigil);
     const sprite = this.add.image(x, y, def.id).setDepth(4);
     const rangeGfx = this.add.graphics().setDepth(2).setVisible(false);
     rangeGfx.lineStyle(1, def.accent, 0.35);
     rangeGfx.strokeCircle(x, y, def.stats.range);
+    const badge = this.add.image(x, y - 28, "no-sigil").setDepth(9).setVisible(false);
 
-    this.towers.push({
+    const tower: PlacedTower = {
       col,
       row,
       id: towerId,
@@ -214,7 +258,11 @@ export class GameScene extends Phaser.Scene {
       cooldown: 0,
       sprite,
       rangeGfx,
-    });
+      badge,
+    };
+    this.towers.push(tower);
+    this.lastTower = tower;
+    this.syncBadge(tower);
     this.occupied.add(key);
     this.gold -= def.cost;
     this.hudDirty = true;
@@ -283,7 +331,13 @@ export class GameScene extends Phaser.Scene {
 
   private recompute(tower: PlacedTower): void {
     tower.resolved = resolveAttack(TOWERS[tower.id], tower.sockets);
+    this.syncBadge(tower);
     if (this.panel.openTower === tower) this.panel.refresh();
+  }
+
+  private syncBadge(tower: PlacedTower): void {
+    tower.badge.setVisible(tower.resolved.behaviour === "none");
+    if (!tower.badge.visible) tower.badge.setAlpha(1);
   }
 
   private towerAt(col: number, row: number): PlacedTower | undefined {
@@ -495,6 +549,7 @@ export class GameScene extends Phaser.Scene {
       selected: this.selected,
       outcome: this.outcome,
       canStart: this.waves.canStart(),
+      canInscribe: this.towers.length > 0 && this.outcome === "playing",
     };
   }
 
@@ -514,6 +569,7 @@ export class GameScene extends Phaser.Scene {
       outcome: this.outcome,
       selected: this.selected,
       panelOpen: this.panel.visible,
+      helpVisible: this.help.visible,
       inventory: this.inventory.map(snapGem),
       towerSockets: this.towers.map((t) => ({
         col: t.col,
@@ -541,9 +597,23 @@ export class GameScene extends Phaser.Scene {
       openPanel: (col: number, row: number): boolean => {
         const t = this.towerAt(col, row);
         if (!t) return false;
+        this.lastTower = t;
         this.panel.show(t);
         return true;
       },
+      closePanel: (): void => {
+        this.panel.hide();
+      },
+      dismissHelp: (): void => {
+        this.help.dismiss();
+      },
+      getUiRects: () => ({
+        game: { w: GAME_WIDTH, h: GAME_HEIGHT },
+        helpVisible: this.help.visible,
+        helpDismiss: this.help.dismissRect(),
+        ...this.hud.rects(),
+        panel: this.panel.visible ? this.panel.rects() : null,
+      }),
       socketByDef: (col: number, row: number, defId: string): boolean => {
         const t = this.towerAt(col, row);
         if (!t) return false;

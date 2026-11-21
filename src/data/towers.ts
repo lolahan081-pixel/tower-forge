@@ -1,3 +1,4 @@
+import type { SigilId } from "./sigils";
 import type { StatBlock } from "./stats";
 import type { FrameTag } from "./tags";
 
@@ -12,6 +13,8 @@ export type TowerDef = {
   /** Base stats. Unused until a Sigil is inscribed. */
   stats: StatBlock;
   tags: readonly FrameTag[];
+  /** Free Sigil auto-socketed on a newly built frame. Not taken from inventory. */
+  starterSigil: SigilId;
   color: number;
   accent: number;
 };
@@ -24,6 +27,7 @@ export const TOWERS: Record<TowerId, TowerDef> = {
     sockets: 3,
     stats: { damage: 8, attackRate: 1.35, range: 140 },
     tags: ["projectile"],
+    starterSigil: "cinder-orb",
     color: 0x2a2420,
     accent: 0xc4451c,
   },
@@ -34,6 +38,7 @@ export const TOWERS: Record<TowerId, TowerDef> = {
     sockets: 4,
     stats: { damage: 14, attackRate: 0.7, range: 120 },
     tags: ["spell"],
+    starterSigil: "crimson-spike",
     color: 0x1c1214,
     accent: 0x8b1a1a,
   },

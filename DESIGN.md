@@ -4,7 +4,7 @@ The last fortress that still guards a gate against the Hollow mist. Dark fantasy
 
 ## Pillars
 
-- **Frames, not guns.** A placed tower is a frame: sockets, base stats, and a tag (Spire = projectile, Font = spell, Totem = aura). It does not attack until a Sigil is inscribed.
+- **Frames, not guns.** A placed tower is a frame: sockets, base stats, and a tag (Spire = projectile, Font = spell, Totem = aura). A newly built frame auto-sockets a free starter Sigil (not taken from inventory) so it can fire immediately; without a Sigil it is inert.
 - **Data-first.** Towers, Sigils, Runes, enemies, waves, and (later) Relics, tree nodes, and enemy mods live in typed data files. Systems look them up by id.
 - **Modifiable stats.** Combat is a `ResolvedAttack` from `resolveAttack(frame, sigil, runes)`: damage, attack rate, range, plus projectile count, chain, pierce, and conversion. Later Relics and the Ember Lattice hook here too.
 - **Permanent ARPG account.** Everything the player owns lives in a stash, as plain serializable records with a unique `uid`. The save is local but portable — groundwork for a later authoritative server and trade.

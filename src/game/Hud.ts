@@ -3,11 +3,9 @@ import { GAME_HEIGHT, GAME_WIDTH, HUD_HEIGHT, MAP_ROWS, TILE_SIZE, type GridPos 
 import { TOWERS, TOWER_IDS, type TowerId } from "../data/towers";
 import { WAVES } from "../data/waves";
 import { Palette } from "../palette";
+import { BTN_H, FONT_BTN, FONT_BTN_SM, FONT_HUD, FONT_TITLE, type UiRect } from "./ui";
 
 const HUD_Y = MAP_ROWS * TILE_SIZE;
-const FONT = '16px Georgia, "Times New Roman", serif';
-const FONT_SMALL = '13px Georgia, "Times New Roman", serif';
-const FONT_TITLE = '22px Georgia, "Times New Roman", serif';
 
 export class Hud {
   private readonly goldText: Phaser.GameObjects.Text;
@@ -15,66 +13,95 @@ export class Hud {
   private readonly waveText: Phaser.GameObjects.Text;
   private readonly startBtn: Phaser.GameObjects.Rectangle;
   private readonly startLabel: Phaser.GameObjects.Text;
+  private readonly inscribeBtn: Phaser.GameObjects.Rectangle;
+  private readonly inscribeLabel: Phaser.GameObjects.Text;
   private readonly overlay: Phaser.GameObjects.Rectangle;
   private readonly overlayText: Phaser.GameObjects.Text;
   private readonly selectMarks: Phaser.GameObjects.Rectangle[] = [];
-  readonly towerHit: { id: TowerId; x: number; y: number; w: number; h: number }[] = [];
-  readonly startHit: { x: number; y: number; w: number; h: number };
+  private readonly towerRects: Record<string, UiRect> = {};
+  readonly startRect: UiRect;
+  readonly inscribeRect: UiRect;
 
   constructor(
     scene: Phaser.Scene,
     onSelect: (id: TowerId) => void,
     onStart: () => void,
+    onInscribe: () => void,
   ) {
-    const style = { font: FONT, color: "#e8e0d4" };
-    this.goldText = scene.add.text(16, HUD_Y + 12, "", style).setDepth(20);
-    this.livesText = scene.add.text(170, HUD_Y + 12, "", style).setDepth(20);
-    this.waveText = scene.add.text(310, HUD_Y + 12, "", style).setDepth(20);
-    scene.add
-      .text(16, HUD_Y + 42, "1 Ember Spire   2 Blood Font   SPACE start wave   Click a frame to inscribe", {
-        font: FONT_SMALL,
-        color: "#8a8490",
-      })
-      .setDepth(20);
+    const style = { font: FONT_HUD, color: "#e8e0d4" };
+    this.goldText = scene.add.text(16, HUD_Y + 6, "", style).setDepth(20);
+    this.livesText = scene.add.text(200, HUD_Y + 6, "", style).setDepth(20);
+    this.waveText = scene.add.text(390, HUD_Y + 6, "", style).setDepth(20);
 
-    let x = 500;
+    const btnY = HUD_Y + 28;
+    const gap = 10;
+    const towerW = 220;
+    const actW = 180;
+    let x = 16;
     for (const id of TOWER_IDS) {
       const def = TOWERS[id];
-      const box = scene.add.rectangle(x + 70, HUD_Y + 36, 140, 52, 0x161418, 1).setStrokeStyle(1, Palette.stoneLight).setDepth(19).setInteractive({ useHandCursor: true });
-      scene.add.image(x + 24, HUD_Y + 36, id).setDepth(20);
-      scene.add
-        .text(x + 44, HUD_Y + 18, `${id === "ember-spire" ? "1  " : "2  "}${def.name}`, { font: FONT_SMALL, color: "#e8e0d4" })
-        .setDepth(20);
-      scene.add
-        .text(x + 44, HUD_Y + 36, `${def.cost} gold`, { font: FONT_SMALL, color: "#c9a227" })
-        .setDepth(20);
-      const mark = scene.add.rectangle(x + 70, HUD_Y + 36, 140, 52).setStrokeStyle(2, Palette.gold).setFillStyle(0, 0).setDepth(21).setVisible(false);
+      const cx = x + towerW / 2;
+      const cy = btnY + BTN_H / 2;
+      const box = scene.add
+        .rectangle(cx, cy, towerW, BTN_H, 0x161418, 1)
+        .setStrokeStyle(2, Palette.stoneLight)
+        .setDepth(19)
+        .setInteractive({ useHandCursor: true });
+      scene.add.image(x + 28, cy, id).setDepth(20);
+      scene.add.text(x + 50, cy - 20, def.name, { font: FONT_BTN, color: "#e8e0d4" }).setDepth(20);
+      scene.add.text(x + 50, cy + 8, `${def.cost} gold`, { font: FONT_BTN_SM, color: "#c9a227" }).setDepth(20);
+      const mark = scene.add
+        .rectangle(cx, cy, towerW, BTN_H)
+        .setStrokeStyle(3, Palette.gold)
+        .setFillStyle(0, 0)
+        .setDepth(21)
+        .setVisible(false);
       this.selectMarks.push(mark);
-      this.towerHit.push({ id, x, y: HUD_Y + 10, w: 140, h: 52 });
+      this.towerRects[id] = { x, y: btnY, w: towerW, h: BTN_H };
       box.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
         pointer.event.stopPropagation();
         onSelect(id);
       });
-      x += 150;
+      box.on("pointerover", () => box.setStrokeStyle(2, Palette.gold));
+      box.on("pointerout", () => box.setStrokeStyle(2, Palette.stoneLight));
+      x += towerW + gap;
     }
 
+    const insX = x;
+    this.inscribeRect = { x: insX, y: btnY, w: actW, h: BTN_H };
+    this.inscribeBtn = scene.add
+      .rectangle(insX + actW / 2, btnY + BTN_H / 2, actW, BTN_H, 0x1a161c, 1)
+      .setStrokeStyle(2, Palette.goldDim)
+      .setDepth(19)
+      .setInteractive({ useHandCursor: true });
+    this.inscribeLabel = scene.add
+      .text(insX + actW / 2, btnY + BTN_H / 2, "INSCRIBE", { font: FONT_BTN, color: "#e8c547" })
+      .setOrigin(0.5)
+      .setDepth(20);
+    this.inscribeBtn.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+      pointer.event.stopPropagation();
+      onInscribe();
+    });
+    this.inscribeBtn.on("pointerover", () => this.inscribeBtn.setStrokeStyle(3, Palette.gold));
+    this.inscribeBtn.on("pointerout", () => this.inscribeBtn.setStrokeStyle(2, Palette.goldDim));
+
+    const startX = GAME_WIDTH - 16 - actW;
+    this.startRect = { x: startX, y: btnY, w: actW, h: BTN_H };
     this.startBtn = scene.add
-      .rectangle(GAME_WIDTH - 90, HUD_Y + 36, 140, 44, 0x2a2014, 1)
-      .setStrokeStyle(1, Palette.goldDim)
+      .rectangle(startX + actW / 2, btnY + BTN_H / 2, actW, BTN_H, 0x2a2014, 1)
+      .setStrokeStyle(2, Palette.goldDim)
       .setDepth(19)
       .setInteractive({ useHandCursor: true });
     this.startLabel = scene.add
-      .text(GAME_WIDTH - 90, HUD_Y + 36, "START WAVE", {
-        font: FONT,
-        color: "#e8c547",
-      })
+      .text(startX + actW / 2, btnY + BTN_H / 2, "START WAVE", { font: FONT_BTN, color: "#e8c547" })
       .setOrigin(0.5)
       .setDepth(20);
-    this.startHit = { x: GAME_WIDTH - 160, y: HUD_Y + 14, w: 140, h: 44 };
     this.startBtn.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
       pointer.event.stopPropagation();
       onStart();
     });
+    this.startBtn.on("pointerover", () => this.startBtn.setStrokeStyle(3, Palette.gold));
+    this.startBtn.on("pointerout", () => this.startBtn.setStrokeStyle(2, Palette.goldDim));
 
     this.overlay = scene.add
       .rectangle(GAME_WIDTH / 2, (GAME_HEIGHT - HUD_HEIGHT) / 2, GAME_WIDTH, MAP_ROWS * TILE_SIZE, Palette.overlay, 0.72)
@@ -99,6 +126,7 @@ export class Hud {
     selected: TowerId;
     outcome: "playing" | "won" | "lost";
     canStart: boolean;
+    canInscribe: boolean;
   }): void {
     this.goldText.setText(`Gold  ${args.gold}`);
     this.livesText.setText(`Lives  ${args.lives}`);
@@ -112,9 +140,13 @@ export class Hud {
 
     const can = args.canStart && args.outcome === "playing";
     this.startBtn.setFillStyle(can ? 0x2a2014 : 0x161416);
-    this.startBtn.setStrokeStyle(1, can ? Palette.gold : Palette.stone);
+    this.startBtn.setStrokeStyle(2, can ? Palette.gold : Palette.stone);
     this.startLabel.setColor(can ? "#e8c547" : "#8a8490");
     this.startLabel.setText(args.waveActive ? "INCOMING" : args.waveNumber >= WAVES.length ? "ENDED" : "START WAVE");
+
+    this.inscribeBtn.setFillStyle(args.canInscribe ? 0x1a161c : 0x141216);
+    this.inscribeBtn.setStrokeStyle(2, args.canInscribe ? Palette.goldDim : Palette.stone);
+    this.inscribeLabel.setColor(args.canInscribe ? "#e8c547" : "#8a8490");
 
     if (args.outcome === "won") {
       this.overlay.setVisible(true);
@@ -130,6 +162,10 @@ export class Hud {
 
   isOverHud(worldY: number): boolean {
     return worldY >= HUD_Y;
+  }
+
+  rects(): { startWave: UiRect; inscribe: UiRect; towers: Record<string, UiRect> } {
+    return { startWave: this.startRect, inscribe: this.inscribeRect, towers: this.towerRects };
   }
 }
 
