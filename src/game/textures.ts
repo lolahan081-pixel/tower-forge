@@ -102,6 +102,17 @@ export function generateTextures(scene: Phaser.Scene): void {
   g.generateTexture("gem-chip", 22, 22);
   g.clear();
 
+  // Hollow Sovereign
+  g.fillStyle(0x141018, 1);
+  g.fillCircle(24, 24, 20);
+  g.fillStyle(0x2a242c, 1);
+  g.fillCircle(24, 24, 14);
+  g.fillStyle(0xe8c547, 1);
+  g.fillTriangle(24, 6, 30, 16, 18, 16);
+  g.fillCircle(24, 22, 4);
+  g.generateTexture("hollow-sovereign", 48, 48);
+  g.clear();
+
   // Relic icons
   g.fillStyle(0x2a1810, 1);
   g.fillRoundedRect(2, 2, 20, 20, 3);

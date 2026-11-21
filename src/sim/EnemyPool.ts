@@ -6,6 +6,9 @@ export class Enemy {
   alive = false;
   def: EnemyDef | null = null;
   hp = 0;
+  maxHp = 0;
+  speedMult = 1;
+  goldMult = 1;
   x = 0;
   y = 0;
   dist = 0;
@@ -22,14 +25,17 @@ export class Enemy {
     this.hpFill = scene.add.rectangle(0, 0, 20, 3, 0x6e1a1a, 1).setVisible(false).setDepth(7);
   }
 
-  reset(def: EnemyDef): void {
+  reset(def: EnemyDef, opts?: { hpMult?: number; speedMult?: number; goldMult?: number; rarity?: Enemy["rarity"] }): void {
     this.alive = true;
     this.def = def;
-    this.hp = def.maxHp;
+    this.maxHp = Math.max(1, Math.round(def.maxHp * (opts?.hpMult ?? 1)));
+    this.hp = this.maxHp;
+    this.speedMult = opts?.speedMult ?? 1;
+    this.goldMult = opts?.goldMult ?? 1;
     this.dist = 0;
     this.progress = 0;
     this.radius = def.radius;
-    this.rarity = "normal";
+    this.rarity = opts?.rarity ?? "normal";
     this.sprite.setTexture(def.id).setVisible(true).setActive(true);
     this.hpBg.setVisible(true);
     this.hpFill.setVisible(true);
@@ -41,7 +47,7 @@ export class Enemy {
   advance(dtSec: number): boolean {
     const def = this.def;
     if (!def || !this.alive) return false;
-    this.dist += def.speed * dtSec;
+    this.dist += def.speed * this.speedMult * dtSec;
     PATH.sample(this.dist, scratchSample);
     this.applySample(scratchSample);
     this.syncBars();
@@ -76,7 +82,7 @@ export class Enemy {
     const width = def.radius * 2;
     const y = this.y - def.radius - 6;
     this.hpBg.setPosition(this.x, y).setSize(width, 3);
-    const ratio = def.maxHp > 0 ? Math.max(0, this.hp / def.maxHp) : 0;
+    const ratio = this.maxHp > 0 ? Math.max(0, this.hp / this.maxHp) : 0;
     const fill = Math.max(0.0001, width * ratio);
     this.hpFill.setPosition(this.x - (width - fill) * 0.5, y).setSize(fill, 3);
     this.hpBg.setVisible(ratio < 1);
@@ -104,9 +110,9 @@ export class EnemyPool {
     for (let i = 0; i < prewarm; i++) this.free.push(new Enemy(scene));
   }
 
-  spawn(def: EnemyDef): Enemy {
+  spawn(def: EnemyDef, opts?: { hpMult?: number; speedMult?: number; goldMult?: number; rarity?: Enemy["rarity"] }): Enemy {
     const enemy = this.free.pop() ?? new Enemy(this.scene);
-    enemy.reset(def);
+    enemy.reset(def, opts);
     this.active.push(enemy);
     return enemy;
   }

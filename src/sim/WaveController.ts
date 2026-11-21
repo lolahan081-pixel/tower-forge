@@ -8,16 +8,26 @@ export class WaveController {
   waveIndex = -1;
   active = false;
   elapsedMs = 0;
+  private waves: readonly WaveDef[] = WAVES;
   private readonly schedule: SpawnEvent[] = [];
   private schedLen = 0;
   private schedIndex = 0;
+
+  useWaves(waves: readonly WaveDef[]): void {
+    this.waves = waves;
+    this.waveIndex = -1;
+    this.active = false;
+    this.elapsedMs = 0;
+    this.schedLen = 0;
+    this.schedIndex = 0;
+  }
 
   get waveNumber(): number {
     return this.waveIndex + 1;
   }
 
   get totalWaves(): number {
-    return WAVES.length;
+    return this.waves.length;
   }
 
   get allSpawned(): boolean {
@@ -25,11 +35,11 @@ export class WaveController {
   }
 
   get hasMoreWaves(): boolean {
-    return this.waveIndex + 1 < WAVES.length;
+    return this.waveIndex + 1 < this.waves.length;
   }
 
   get currentWave(): WaveDef | undefined {
-    return this.waveIndex >= 0 ? WAVES[this.waveIndex] : undefined;
+    return this.waveIndex >= 0 ? this.waves[this.waveIndex] : undefined;
   }
 
   canStart(): boolean {
@@ -39,7 +49,7 @@ export class WaveController {
   startNext(): boolean {
     if (!this.canStart()) return false;
     this.waveIndex += 1;
-    const wave = WAVES[this.waveIndex];
+    const wave = this.waves[this.waveIndex];
     if (!wave) return false;
     this.buildSchedule(wave);
     this.active = true;

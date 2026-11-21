@@ -1,4 +1,4 @@
-export type EnemyId = "wretch" | "brute";
+export type EnemyId = "wretch" | "brute" | "hollow-sovereign";
 
 export type EnemyDef = {
   id: EnemyId;
@@ -33,8 +33,18 @@ export const ENEMIES: Record<EnemyId, EnemyDef> = {
     color: 0x1c1a1e,
     accent: 0x6a2428,
   },
+  "hollow-sovereign": {
+    id: "hollow-sovereign",
+    name: "Hollow Sovereign",
+    maxHp: 520,
+    speed: 32,
+    goldReward: 80,
+    radius: 22,
+    color: 0x141018,
+    accent: 0xe8c547,
+  },
 };
 
 export function isEnemyId(value: string): value is EnemyId {
-  return value === "wretch" || value === "brute";
+  return Object.prototype.hasOwnProperty.call(ENEMIES, value);
 }

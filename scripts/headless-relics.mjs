@@ -70,6 +70,9 @@ if (!(after.preview.damage > dmgBefore)) {
 }
 
 await tapRect(page, (await page.evaluate(() => window.__towerForge.getUiRects())).enterBreach);
+await page.waitForTimeout(120);
+const depthUi = await page.evaluate(() => window.__towerForge.getUiRects());
+if (depthUi.depthSelect?.enter) await tapRect(page, depthUi.depthSelect.enter);
 await waitReady(page, "game");
 await dismissHelp(page);
 await page.evaluate(() => window.__towerForge.guaranteeDrop("relic"));

@@ -15,7 +15,9 @@ export type UiRects = {
   enterBreach?: UiRect;
   tabLoadout?: UiRect;
   tabLattice?: UiRect;
+  tabStash?: UiRect;
   tabForge?: UiRect;
+  depthSelect?: { depths: UiRect[]; enter: UiRect; close: UiRect } | null;
   forgeRelics?: UiRect[];
   forgeCurrencies?: UiRect[];
   forgeApply?: UiRect;
@@ -38,7 +40,7 @@ export type UiRects = {
 export type HubSnapshot = {
   ready: boolean;
   scene: "bastion";
-  tab: "loadout" | "forge" | "lattice";
+  tab: "loadout" | "stash" | "forge" | "lattice";
   selected: string;
   helpVisible: boolean;
   runeInventory: GemSnap[];

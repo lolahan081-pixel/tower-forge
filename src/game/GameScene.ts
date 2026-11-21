@@ -2,7 +2,8 @@ import Phaser from "phaser";
 import { ENEMIES, type EnemyId } from "../data/enemies";
 import { makeGem, type GemInstance } from "../data/items";
 import { rollKillDrops, type SpoilsItem } from "../data/drops";
-import { collectSpoils, getProfile, persistProfile } from "../data/profile";
+import { buildBreachWaves, goldScale, hpScale, livesForDepth, speedScale } from "../data/depths";
+import { awardBreachClear, collectSpoils, getProfile, persistProfile } from "../data/profile";
 import { makeRelic, type RelicId, type RelicRarity } from "../data/relics";
 import {
   GAME_HEIGHT,
@@ -74,8 +75,14 @@ export class GameScene extends Phaser.Scene {
     super("game");
   }
 
+  init(data?: { depth?: number }): void {
+    this.depth = data?.depth && data.depth > 0 ? data.depth : 1;
+  }
+
   create(): void {
     this.resetBattleState();
+    this.waves.useWaves(buildBreachWaves(this.depth));
+    this.lives = livesForDepth(this.depth);
     generateTextures(this);
     drawBoard(this);
 
@@ -195,14 +202,13 @@ export class GameScene extends Phaser.Scene {
 
   private resetBattleState(): void {
     this.gold = STARTING_GOLD;
-    this.lives = STARTING_LIVES;
+    this.lives = livesForDepth(this.depth);
     this.outcome = "playing";
     this.selected = "ember-spire";
     this.towers = [];
     this.occupied = new Set();
     this.lastTower = null;
     this.spoils = [];
-    this.depth = 1;
     this.dropGuarantee = "off";
     this.hudDirty = true;
     this.fpsEma = 60;
@@ -364,7 +370,13 @@ export class GameScene extends Phaser.Scene {
   }
 
   private spawnEnemy(id: EnemyId): void {
-    this.enemies.spawn(ENEMIES[id]);
+    const rarity = id === "hollow-sovereign" ? "unique" : "normal";
+    this.enemies.spawn(ENEMIES[id], {
+      hpMult: hpScale(this.depth),
+      speedMult: speedScale(this.depth),
+      goldMult: goldScale(this.depth),
+      rarity,
+    });
   }
 
   private stepEnemies(dtSec: number): void {
@@ -497,7 +509,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private killEnemy(enemy: Enemy, ownerIndex: number): void {
-    const reward = enemy.def?.goldReward ?? 0;
+    const reward = Math.round((enemy.def?.goldReward ?? 0) * (enemy.goldMult ?? 1));
     const list = this.enemies.active;
     const idx = list.indexOf(enemy);
     if (idx >= 0) this.enemies.releaseAt(idx);
@@ -531,6 +543,7 @@ export class GameScene extends Phaser.Scene {
     this.outcome = outcome;
     this.waves.active = false;
     this.hudDirty = true;
+    if (outcome === "won") awardBreachClear(this.depth);
     if (this.spoils.length > 0) this.spoilsOverlay.show(this.spoils);
   }
 
@@ -573,6 +586,7 @@ export class GameScene extends Phaser.Scene {
       gold: this.gold,
       lives: this.lives,
       waveNumber: this.waves.waveNumber,
+      waveTotal: this.waves.totalWaves,
       waveActive: this.waves.active,
       selected: this.selected,
       outcome: this.outcome,

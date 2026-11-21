@@ -17,13 +17,15 @@ import { resolveLoadout, runeMatchesSigil, type ResolvedAttack } from "../data/s
 import { TOWERS, TOWER_IDS, type TowerId } from "../data/towers";
 import { Palette } from "../palette";
 import type { HubSnapshot, UiRects } from "../debug";
+import { DepthSelect } from "./DepthSelect";
 import { ForgePanel } from "./ForgePanel";
 import { HelpOverlay } from "./HelpOverlay";
+import { StashPanel } from "./StashPanel";
 import { gemColor, gemName, itemColor } from "./gems";
 import { generateTextures } from "./textures";
 import { BTN_H, containsRect, FONT_BODY, FONT_BTN, FONT_BTN_SM, FONT_HUD, FONT_TITLE, type UiRect } from "./ui";
 
-type Tab = "loadout" | "forge" | "lattice";
+type Tab = "loadout" | "stash" | "forge" | "lattice";
 
 type SlotView = { box: Phaser.GameObjects.Rectangle; chip: Phaser.GameObjects.Rectangle; label: Phaser.GameObjects.Text; rect: UiRect };
 type InvView = SlotView;
@@ -40,11 +42,13 @@ export class BastionScene extends Phaser.Scene {
   private loadoutRoot!: Phaser.GameObjects.Container;
   private latticeRoot!: Phaser.GameObjects.Container;
   private forge!: ForgePanel;
+  private stash!: StashPanel;
+  private depthSelect!: DepthSelect;
   private hint!: Phaser.GameObjects.Text;
   private statsText!: Phaser.GameObjects.Text;
   private sigilLabel!: Phaser.GameObjects.Text;
   private towerMarks: Phaser.GameObjects.Rectangle[] = [];
-  private tabMarks: { loadout: Phaser.GameObjects.Rectangle; forge: Phaser.GameObjects.Rectangle; lattice: Phaser.GameObjects.Rectangle } | null = null;
+  private tabMarks: { loadout: Phaser.GameObjects.Rectangle; stash: Phaser.GameObjects.Rectangle; forge: Phaser.GameObjects.Rectangle; lattice: Phaser.GameObjects.Rectangle } | null = null;
   private runeViews: SlotView[] = [];
   private relicViews: SlotView[] = [];
   private invViews: InvView[] = [];
@@ -55,6 +59,7 @@ export class BastionScene extends Phaser.Scene {
   private tabLoadoutRect!: UiRect;
   private tabLatticeRect!: UiRect;
   private tabForgeRect!: UiRect;
+  private tabStashRect!: UiRect;
   private unsocketRect!: UiRect;
   private towerRects: Record<string, UiRect> = {};
   private invRunesRect!: UiRect;
@@ -95,36 +100,32 @@ export class BastionScene extends Phaser.Scene {
     this.makeButton(enterX, enterY, enterW, BTN_H, "ENTER BREACH", true);
 
     const tabY = 16 + BTN_H + 16;
-    const tabW = 200;
+    const tabW = 168;
     this.tabLoadoutRect = { x: 24, y: tabY, w: tabW, h: BTN_H };
-    this.tabForgeRect = { x: 24 + tabW + 12, y: tabY, w: tabW, h: BTN_H };
-    this.tabLatticeRect = { x: 24 + 2 * (tabW + 12), y: tabY, w: tabW, h: BTN_H };
+    this.tabStashRect = { x: 24 + tabW + 8, y: tabY, w: tabW, h: BTN_H };
+    this.tabForgeRect = { x: 24 + 2 * (tabW + 8), y: tabY, w: tabW, h: BTN_H };
+    this.tabLatticeRect = { x: 24 + 3 * (tabW + 8), y: tabY, w: tabW, h: BTN_H };
     this.makeButton(this.tabLoadoutRect.x, tabY, tabW, BTN_H, "LOADOUT", false);
+    this.makeButton(this.tabStashRect.x, tabY, tabW, BTN_H, "STASH", false);
     this.makeButton(this.tabForgeRect.x, tabY, tabW, BTN_H, "FORGE", false);
     this.makeButton(this.tabLatticeRect.x, tabY, tabW, BTN_H, "LATTICE", false);
+    const mark = (rect: { x: number; y: number; w: number; h: number }, vis: boolean) =>
+      this.add.rectangle(rect.x + tabW / 2, tabY + BTN_H / 2, tabW, BTN_H).setStrokeStyle(3, Palette.gold).setFillStyle(0, 0).setDepth(6).setVisible(vis);
     this.tabMarks = {
-      loadout: this.add
-        .rectangle(this.tabLoadoutRect.x + tabW / 2, tabY + BTN_H / 2, tabW, BTN_H)
-        .setStrokeStyle(3, Palette.gold)
-        .setFillStyle(0, 0)
-        .setDepth(6),
-      forge: this.add
-        .rectangle(this.tabForgeRect.x + tabW / 2, tabY + BTN_H / 2, tabW, BTN_H)
-        .setStrokeStyle(3, Palette.gold)
-        .setFillStyle(0, 0)
-        .setDepth(6)
-        .setVisible(false),
-      lattice: this.add
-        .rectangle(this.tabLatticeRect.x + tabW / 2, tabY + BTN_H / 2, tabW, BTN_H)
-        .setStrokeStyle(3, Palette.gold)
-        .setFillStyle(0, 0)
-        .setDepth(6)
-        .setVisible(false),
+      loadout: mark(this.tabLoadoutRect, true),
+      stash: mark(this.tabStashRect, false),
+      forge: mark(this.tabForgeRect, false),
+      lattice: mark(this.tabLatticeRect, false),
     };
 
     this.buildLoadout();
+    this.stash = new StashPanel(this);
     this.forge = new ForgePanel(this);
     this.buildLattice();
+    this.depthSelect = new DepthSelect(this, (depth) => {
+      persistProfile();
+      this.scene.start("game", { depth });
+    });
 
     this.help = new HelpOverlay(this, () => undefined, "bastion");
     if (this.help.shouldShow()) this.help.show();
@@ -375,13 +376,21 @@ export class BastionScene extends Phaser.Scene {
       this.help.handleTap(x, y);
       return;
     }
+    if (this.depthSelect.visible) {
+      this.depthSelect.handleTap(x, y);
+      return;
+    }
     if (containsRect(this.enterRect, x, y)) {
-      persistProfile();
-      this.scene.start("game");
+      this.depthSelect.show();
       return;
     }
     if (containsRect(this.tabLoadoutRect, x, y)) {
       this.tab = "loadout";
+      this.refresh();
+      return;
+    }
+    if (containsRect(this.tabStashRect, x, y)) {
+      this.tab = "stash";
       this.refresh();
       return;
     }
@@ -397,6 +406,10 @@ export class BastionScene extends Phaser.Scene {
     }
     if (this.tab === "forge") {
       this.forge.handleTap(x, y);
+      return;
+    }
+    if (this.tab === "stash") {
+      this.stash.handleTap(x, y);
       return;
     }
     if (this.tab !== "loadout") return;
@@ -511,15 +524,19 @@ export class BastionScene extends Phaser.Scene {
 
   private refresh(): void {
     const onLoadout = this.tab === "loadout";
+    const onStash = this.tab === "stash";
     const onForge = this.tab === "forge";
     const onLattice = this.tab === "lattice";
     this.loadoutRoot.setVisible(onLoadout);
+    this.stash.root.setVisible(onStash);
     this.forge.root.setVisible(onForge);
     this.latticeRoot.setVisible(onLattice);
     this.tabMarks?.loadout.setVisible(onLoadout);
+    this.tabMarks?.stash.setVisible(onStash);
     this.tabMarks?.forge.setVisible(onForge);
     this.tabMarks?.lattice.setVisible(onLattice);
     if (onForge) this.forge.refresh();
+    if (onStash) this.stash.refresh();
     if (!onLoadout) return;
 
     const def = TOWERS[this.selected];
@@ -697,8 +714,12 @@ export class BastionScene extends Phaser.Scene {
       helpDismiss: this.help.dismissRect(),
       enterBreach: this.enterRect,
       tabLoadout: this.tabLoadoutRect,
+      tabStash: this.tabStashRect,
       tabForge: this.tabForgeRect,
       tabLattice: this.tabLatticeRect,
+      depthSelect: this.depthSelect.visible
+        ? { depths: this.depthSelect.depthRects, enter: this.depthSelect.enterRect, close: this.depthSelect.closeRect }
+        : null,
       forgeRelics: this.forge.root.visible ? this.forge.relicRects() : [],
       forgeCurrencies: this.forge.root.visible ? this.forge.currencyRects() : [],
       forgeApply: this.forge.applyRect,

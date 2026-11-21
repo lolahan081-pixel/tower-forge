@@ -1,7 +1,6 @@
 import Phaser from "phaser";
 import { GAME_HEIGHT, GAME_WIDTH, HUD_HEIGHT, MAP_ROWS, TILE_SIZE, type GridPos } from "../data/map";
 import { TOWERS, TOWER_IDS, type TowerId } from "../data/towers";
-import { WAVES } from "../data/waves";
 import { Palette } from "../palette";
 import { BTN_H, FONT_BTN, FONT_BTN_SM, FONT_HUD, FONT_TITLE, type UiRect } from "./ui";
 
@@ -148,6 +147,7 @@ export class Hud {
     gold: number;
     lives: number;
     waveNumber: number;
+    waveTotal: number;
     waveActive: boolean;
     selected: TowerId;
     outcome: "playing" | "won" | "lost";
@@ -156,7 +156,7 @@ export class Hud {
   }): void {
     this.goldText.setText(`Gold  ${args.gold}`);
     this.livesText.setText(`Lives  ${args.lives}`);
-    const waveLabel = args.waveNumber <= 0 ? `Wave  —  / ${WAVES.length}` : `Wave  ${args.waveNumber}  / ${WAVES.length}`;
+    const waveLabel = args.waveNumber <= 0 ? `Wave  —  / ${args.waveTotal}` : `Wave  ${args.waveNumber}  / ${args.waveTotal}`;
     this.waveText.setText(waveLabel);
 
     for (let i = 0; i < TOWER_IDS.length; i++) {
@@ -168,7 +168,7 @@ export class Hud {
     this.startBtn.setFillStyle(can ? 0x2a2014 : 0x161416);
     this.startBtn.setStrokeStyle(2, can ? Palette.gold : Palette.stone);
     this.startLabel.setColor(can ? "#e8c547" : "#8a8490");
-    this.startLabel.setText(args.waveActive ? "INCOMING" : args.waveNumber >= WAVES.length ? "ENDED" : "START WAVE");
+    this.startLabel.setText(args.waveActive ? "INCOMING" : args.waveNumber >= args.waveTotal ? "ENDED" : "START WAVE");
 
     this.inscribeBtn.setFillStyle(args.canInscribe ? 0x1a161c : 0x141216);
     this.inscribeBtn.setStrokeStyle(2, args.canInscribe ? Palette.goldDim : Palette.stone);

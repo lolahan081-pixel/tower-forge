@@ -1,5 +1,6 @@
 import { emptyCurrency, isCurrencyId, type CurrencyId } from "./currency";
 import { makeGem, type GemInstance } from "./items";
+import { accountXpForClear, pointsForClear } from "./depths";
 import type { SpoilsItem } from "./drops";
 import { isRelic, type RelicInstance } from "./relics";
 import { RUNE_IDS } from "./runes";
@@ -297,5 +298,13 @@ export function collectSpoils(items: readonly SpoilsItem[]): void {
       profile.currency[item.id] = (profile.currency[item.id] ?? 0) + item.qty;
     }
   }
+  persistProfile();
+}
+
+export function awardBreachClear(depth: number): void {
+  const profile = getProfile();
+  if (depth > profile.highestDepthCleared) profile.highestDepthCleared = depth;
+  profile.accountXp += accountXpForClear(depth);
+  profile.unspentPoints += pointsForClear(depth);
   persistProfile();
 }
