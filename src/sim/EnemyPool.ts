@@ -11,6 +11,7 @@ export class Enemy {
   dist = 0;
   progress = 0;
   radius = 0;
+  rarity: "normal" | "magic" | "rare" | "unique" = "normal";
   sprite: Phaser.GameObjects.Image;
   hpBg: Phaser.GameObjects.Rectangle;
   hpFill: Phaser.GameObjects.Rectangle;
@@ -28,6 +29,7 @@ export class Enemy {
     this.dist = 0;
     this.progress = 0;
     this.radius = def.radius;
+    this.rarity = "normal";
     this.sprite.setTexture(def.id).setVisible(true).setActive(true);
     this.hpBg.setVisible(true);
     this.hpFill.setVisible(true);

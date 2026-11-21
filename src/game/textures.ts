@@ -102,6 +102,43 @@ export function generateTextures(scene: Phaser.Scene): void {
   g.generateTexture("gem-chip", 22, 22);
   g.clear();
 
+  // Relic icons
+  g.fillStyle(0x2a1810, 1);
+  g.fillRoundedRect(2, 2, 20, 20, 3);
+  g.fillStyle(0xc4451c, 1);
+  g.fillCircle(12, 12, 6);
+  g.fillStyle(0xe86a2a, 1);
+  g.fillCircle(12, 12, 3);
+  g.generateTexture("relic-ember", 24, 24);
+  g.clear();
+
+  g.fillStyle(0x1a1014, 1);
+  g.fillRoundedRect(2, 2, 20, 20, 3);
+  g.fillStyle(0x8b1a1a, 1);
+  g.fillCircle(12, 14, 6);
+  g.fillStyle(0xc42222, 1);
+  g.fillCircle(12, 10, 3);
+  g.generateTexture("relic-blood", 24, 24);
+  g.clear();
+
+  g.fillStyle(0x1a1810, 1);
+  g.fillRoundedRect(2, 2, 20, 20, 3);
+  g.fillStyle(0xc9a227, 1);
+  g.fillCircle(12, 12, 7);
+  g.fillStyle(0xe8c547, 1);
+  g.fillRect(11, 6, 2, 8);
+  g.generateTexture("relic-ash", 24, 24);
+  g.clear();
+
+  g.fillStyle(0x161618, 1);
+  g.fillRoundedRect(2, 2, 20, 20, 3);
+  g.fillStyle(0x8a8490, 1);
+  g.fillRoundedRect(6, 6, 12, 12, 2);
+  g.fillStyle(0xe8e0d4, 1);
+  g.fillCircle(12, 12, 3);
+  g.generateTexture("relic-gate", 24, 24);
+  g.clear();
+
   // Empty-frame warning badge.
   g.fillStyle(0x1a1210, 1);
   g.fillCircle(12, 12, 11);

@@ -19,6 +19,8 @@ export type UiRects = {
   runeSockets?: UiRect[];
   relics?: UiRect[];
   inventory?: UiRect[];
+  invTabRunes?: UiRect;
+  invTabRelics?: UiRect;
   returnToBastion: UiRect | null;
   panel: {
     close: UiRect;
@@ -37,6 +39,9 @@ export type HubSnapshot = {
   helpVisible: boolean;
   runeInventory: GemSnap[];
   loadoutRunes: (GemSnap | null)[];
+  loadoutRelics?: ({ uid: string; defId: string; rarity: string } | null)[];
+  relicInventory?: { uid: string; defId: string; rarity: string }[];
+  invMode?: "rune" | "relic";
   preview: ResolvedAttack;
 };
 
@@ -82,6 +87,10 @@ export type TowerForgeDebug = {
   socketByDef: (col: number, row: number, defId: string) => boolean;
   getProfile: () => PlayerProfile;
   forceOutcome: (outcome: "won" | "lost") => void;
+  getSpoils?: () => unknown[];
+  collectSpoils?: () => void;
+  giveRelic?: (defId?: string, rarity?: "normal" | "magic" | "rare") => unknown;
+  guaranteeDrop?: (kind?: "off" | "relic" | "rune" | "sigil" | "currency") => void;
 };
 
 declare global {

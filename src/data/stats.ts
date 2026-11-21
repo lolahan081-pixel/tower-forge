@@ -2,6 +2,8 @@ import { isRuneId, RUNES } from "./runes";
 import { isSigilId, SIGILS, type SigilBehaviour, type SigilId } from "./sigils";
 import { addGemXp, sigilDamageScale, type GemInstance } from "./items";
 import type { TowerDef } from "./towers";
+import { type StatMods } from "./modifiers";
+import { stackRelics, type RelicInstance } from "./relics";
 
 export type StatBlock = {
   damage: number;
@@ -21,6 +23,7 @@ export type ResolvedAttack = StatBlock & {
   novaRadius: number;
   /** 0–1 fraction of damage treated as cold (tint / later resists). */
   convertToCold: number;
+  goldMult: number;
   texture: string;
 };
 
@@ -36,6 +39,7 @@ export const INERT_ATTACK: ResolvedAttack = {
   pierceCount: 0,
   novaRadius: 0,
   convertToCold: 0,
+  goldMult: 1,
   texture: "cinder-orb",
 };
 
@@ -112,6 +116,7 @@ export function resolveAttack(frame: TowerDef, sockets: readonly (GemInstance | 
     pierceCount: Math.max(0, pierceCount),
     novaRadius,
     convertToCold,
+    goldMult: 1,
     texture: convertToCold >= 0.25 ? "frost-bolt" : sdef.texture,
   };
 }
@@ -127,11 +132,31 @@ export function grantSocketXp(sockets: readonly (GemInstance | null)[], amount: 
   return changed;
 }
 
+export function applyStatMods(resolved: ResolvedAttack, mods: StatMods): ResolvedAttack {
+  return {
+    ...resolved,
+    damage: (resolved.damage + mods.addDamage) * mods.damageMult,
+    attackRate: resolved.attackRate * mods.attackRateMult,
+    range: resolved.range + mods.addRange,
+    projectileCount: Math.max(1, resolved.projectileCount + mods.addProjectiles),
+    pierceCount: Math.max(0, resolved.pierceCount + mods.addPierce),
+    chainCount: Math.max(0, resolved.chainCount + mods.addChain),
+    convertToCold: Math.min(1, resolved.convertToCold + mods.convertToCold),
+    goldMult: resolved.goldMult * mods.goldMult,
+    texture: resolved.convertToCold + mods.convertToCold >= 0.25 ? "frost-bolt" : resolved.texture,
+  };
+}
+
 export function resolveLoadout(
   frame: TowerDef,
   sigil: GemInstance | null,
   runes: readonly (GemInstance | null)[],
+  relics: readonly (RelicInstance | null)[] = [],
+  extra?: StatMods,
 ): ResolvedAttack {
   const sockets: (GemInstance | null)[] = [sigil, ...runes];
-  return resolveAttack(frame, sockets);
+  let resolved = resolveAttack(frame, sockets);
+  if (relics.length > 0) resolved = applyStatMods(resolved, stackRelics(relics));
+  if (extra) resolved = applyStatMods(resolved, extra);
+  return resolved;
 }

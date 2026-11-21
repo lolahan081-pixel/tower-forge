@@ -1,7 +1,9 @@
 import Phaser from "phaser";
 import { ENEMIES, type EnemyId } from "../data/enemies";
 import { makeGem, type GemInstance } from "../data/items";
-import { getProfile, persistProfile } from "../data/profile";
+import { rollKillDrops, type SpoilsItem } from "../data/drops";
+import { collectSpoils, getProfile, persistProfile } from "../data/profile";
+import { makeRelic, type RelicId, type RelicRarity } from "../data/relics";
 import {
   GAME_HEIGHT,
   GAME_WIDTH,
@@ -15,7 +17,7 @@ import {
   isInBounds,
 } from "../data/map";
 import { isSigilId, SIGILS } from "../data/sigils";
-import { grantSocketXp, resolveAttack, sigilFitsFrame, type ResolvedAttack } from "../data/stats";
+import { grantSocketXp, resolveLoadout, sigilFitsFrame, type ResolvedAttack } from "../data/stats";
 import { TOWERS, isTowerId, type TowerId } from "../data/towers";
 import { Palette } from "../palette";
 import { collectInRadius, findChainTarget, findNearestToExit } from "../sim/combat";
@@ -27,6 +29,7 @@ import type { GameSnapshot, GemSnap } from "../debug";
 import { HelpOverlay } from "./HelpOverlay";
 import { Hud, pointerToCell } from "./Hud";
 import { SigilPanel } from "./SigilPanel";
+import { SpoilsOverlay } from "./SpoilsOverlay";
 import { drawBoard } from "./drawMap";
 import { generateTextures } from "./textures";
 import type { PlacedTower } from "./towerState";
@@ -49,6 +52,10 @@ export class GameScene extends Phaser.Scene {
   private panel!: SigilPanel;
   private help!: HelpOverlay;
   private lastTower: PlacedTower | null = null;
+  private spoilsOverlay!: SpoilsOverlay;
+  private spoils: SpoilsItem[] = [];
+  private depth = 1;
+  private dropGuarantee: "off" | "relic" | "rune" | "sigil" | "currency" = "off";
   private hover!: Phaser.GameObjects.Rectangle;
   private rangePreview!: Phaser.GameObjects.Graphics;
   private hudDirty = true;
@@ -109,6 +116,11 @@ export class GameScene extends Phaser.Scene {
       unsocket: (tower) => this.tryUnsocketSigil(tower),
     });
 
+    this.spoilsOverlay = new SpoilsOverlay(this, () => {
+      this.spoils = [];
+      this.hudDirty = true;
+    });
+
     this.input.on("pointermove", (pointer: Phaser.Input.Pointer) => {
       this.updateHover(pointer.worldX, pointer.worldY);
     });
@@ -116,6 +128,10 @@ export class GameScene extends Phaser.Scene {
       if (pointer.rightButtonDown()) return;
       if (this.help.visible) {
         this.help.handleTap(pointer.worldX, pointer.worldY);
+        return;
+      }
+      if (this.spoilsOverlay.visible) {
+        this.spoilsOverlay.handleTap(pointer.worldX, pointer.worldY);
         return;
       }
       if (this.panel.visible) {
@@ -162,6 +178,9 @@ export class GameScene extends Phaser.Scene {
     this.towers = [];
     this.occupied = new Set();
     this.lastTower = null;
+    this.spoils = [];
+    this.depth = 1;
+    this.dropGuarantee = "off";
     this.hudDirty = true;
     this.fpsEma = 60;
     this.stressMode = false;
@@ -171,6 +190,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   private returnToBastion(): void {
+    if (this.spoils.length > 0) collectSpoils(this.spoils);
+    this.spoils = [];
     persistProfile();
     this.scene.start("bastion");
   }
@@ -246,7 +267,7 @@ export class GameScene extends Phaser.Scene {
       x,
       y,
       sockets,
-      resolved: resolveAttack(def, sockets),
+      resolved: resolveLoadout(def, sockets[0] ?? null, sockets.slice(1), getProfile().loadouts[towerId]?.relics ?? []),
       cooldown: 0,
       sprite,
       rangeGfx,
@@ -297,7 +318,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   private recompute(tower: PlacedTower): void {
-    tower.resolved = resolveAttack(TOWERS[tower.id], tower.sockets);
+    const loadout = getProfile().loadouts[tower.id];
+    const sigil = tower.sockets[0] && tower.sockets[0].kind === "sigil" ? tower.sockets[0] : null;
+    tower.resolved = resolveLoadout(TOWERS[tower.id], sigil, tower.sockets.slice(1), loadout?.relics ?? []);
     this.syncBadge(tower);
     if (this.panel.openTower === tower) this.panel.refresh();
   }
@@ -455,11 +478,23 @@ export class GameScene extends Phaser.Scene {
     if (idx >= 0) this.enemies.releaseAt(idx);
     else enemy.release();
     if (this.stressMode) return;
+    const tower = this.towers[ownerIndex];
+    const goldMult = tower?.resolved.goldMult ?? 1;
     if (reward > 0) {
-      this.gold += reward;
+      this.gold += Math.max(1, Math.round(reward * goldMult));
       this.hudDirty = true;
     }
-    const tower = this.towers[ownerIndex];
+    const rarity = enemy.rarity ?? "normal";
+    if (this.dropGuarantee === "relic") {
+      this.spoils.push({ kind: "relic", item: makeRelic("gate-seal", "magic", Math.max(1, this.depth * 2)) });
+    } else if (this.dropGuarantee !== "off") {
+      const forced = rollKillDrops("unique", this.depth);
+      const hit = forced.find((d) => d.kind === this.dropGuarantee);
+      if (hit) this.spoils.push(hit);
+    } else {
+      const drops = rollKillDrops(rarity, this.depth);
+      for (let i = 0; i < drops.length; i++) this.spoils.push(drops[i]!);
+    }
     if (tower) {
       grantSocketXp(tower.sockets, reward);
       this.recompute(tower);
@@ -471,6 +506,7 @@ export class GameScene extends Phaser.Scene {
     this.outcome = outcome;
     this.waves.active = false;
     this.hudDirty = true;
+    if (this.spoils.length > 0) this.spoilsOverlay.show(this.spoils);
   }
 
   private updateHover(x: number, y: number): void {
@@ -594,6 +630,20 @@ export class GameScene extends Phaser.Scene {
       getProfile: () => getProfile(),
       forceOutcome: (outcome: "won" | "lost") => {
         this.setOutcome(outcome);
+      },
+      getSpoils: () => this.spoils,
+      collectSpoils: () => {
+        this.spoilsOverlay.take();
+      },
+      giveRelic: (defId?: string, rarity: RelicRarity = "magic") => {
+        const id = (defId as RelicId) || "ember-core";
+        const relic = makeRelic(id, rarity, Math.max(1, this.depth * 2));
+        getProfile().relicInventory.push(relic);
+        persistProfile();
+        return relic;
+      },
+      guaranteeDrop: (kind: "off" | "relic" | "rune" | "sigil" | "currency" = "relic") => {
+        this.dropGuarantee = kind;
       },
     };
     window.__towerForge = api;
