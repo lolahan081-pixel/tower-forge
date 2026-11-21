@@ -201,17 +201,19 @@ export class BastionScene extends Phaser.Scene {
     const relicY = runeY + 24 + slotH + 12;
     children.push(this.add.text(panelX + 20, relicY, "Relic slots", { font: FONT_BTN_SM, color: "#8a8490" }));
     this.relicViews = [];
-    const relicW = 200;
+    const rowInner = panelW - 40;
+    const rowGap = 12;
+    const relicRowW = (rowInner - rowGap * 2) / 3;
     for (let i = 0; i < 2; i++) {
-      const x = panelX + 20 + i * (relicW + 12);
+      const x = panelX + 20 + i * (relicRowW + rowGap);
       const y = relicY + 24;
-      const view = this.makeSlot(x, y, relicW, slotH);
+      const view = this.makeSlot(x, y, relicRowW, slotH);
       this.relicViews.push(view);
       children.push(view.box, view.chip, view.label);
     }
 
-    const unW = 200;
-    const unX = panelX + panelW - 20 - unW;
+    const unW = relicRowW;
+    const unX = panelX + 20 + 2 * (relicRowW + rowGap);
     const unY = relicY + 24;
     this.unsocketRect = { x: unX, y: unY, w: unW, h: BTN_H };
     this.unsocketBtn = this.add
