@@ -18,6 +18,8 @@ export type UiRects = {
   tabStash?: UiRect;
   tabForge?: UiRect;
   depthSelect?: { depths: UiRect[]; enter: UiRect; close: UiRect } | null;
+  latticeNodes?: Record<string, UiRect>;
+  latticeView?: UiRect;
   forgeRelics?: UiRect[];
   forgeCurrencies?: UiRect[];
   forgeApply?: UiRect;
@@ -97,6 +99,9 @@ export type TowerForgeDebug = {
   collectSpoils?: () => void;
   giveRelic?: (defId?: string, rarity?: "normal" | "magic" | "rare") => unknown;
   giveCurrency?: (id: string, qty?: number) => void;
+  givePoints?: (n?: number) => void;
+  allocateNode?: (id: string) => unknown;
+  latticeNodes?: Record<string, UiRect>;
   guaranteeDrop?: (kind?: "off" | "relic" | "rune" | "sigil" | "currency") => void;
   shopOffers?: () => unknown[];
   buyShop?: (index: number) => boolean;

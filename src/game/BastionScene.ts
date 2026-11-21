@@ -17,9 +17,11 @@ import { resolveLoadout, runeMatchesSigil, type ResolvedAttack } from "../data/s
 import { TOWERS, TOWER_IDS, type TowerId } from "../data/towers";
 import { Palette } from "../palette";
 import type { HubSnapshot, UiRects } from "../debug";
+import { latticeForTags, tryAllocate } from "../data/lattice";
 import { DepthSelect } from "./DepthSelect";
 import { ForgePanel } from "./ForgePanel";
 import { HelpOverlay } from "./HelpOverlay";
+import { LatticePanel } from "./LatticePanel";
 import { StashPanel } from "./StashPanel";
 import { gemColor, gemName, itemColor } from "./gems";
 import { generateTextures } from "./textures";
@@ -40,7 +42,7 @@ export class BastionScene extends Phaser.Scene {
   private help!: HelpOverlay;
 
   private loadoutRoot!: Phaser.GameObjects.Container;
-  private latticeRoot!: Phaser.GameObjects.Container;
+  private lattice!: LatticePanel;
   private forge!: ForgePanel;
   private stash!: StashPanel;
   private depthSelect!: DepthSelect;
@@ -121,7 +123,7 @@ export class BastionScene extends Phaser.Scene {
     this.buildLoadout();
     this.stash = new StashPanel(this);
     this.forge = new ForgePanel(this);
-    this.buildLattice();
+    this.lattice = new LatticePanel(this);
     this.depthSelect = new DepthSelect(this, (depth) => {
       persistProfile();
       this.scene.start("game", { depth });
@@ -133,7 +135,14 @@ export class BastionScene extends Phaser.Scene {
 
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
       if (pointer.rightButtonDown()) return;
+      if (this.tab === "lattice" && this.lattice.handleDown(pointer.worldX, pointer.worldY)) return;
       this.handleTap(pointer.worldX, pointer.worldY);
+    });
+    this.input.on("pointermove", (pointer: Phaser.Input.Pointer) => {
+      if (this.tab === "lattice") this.lattice.handleMove(pointer.worldX, pointer.worldY);
+    });
+    this.input.on("pointerup", (pointer: Phaser.Input.Pointer) => {
+      if (this.tab === "lattice") this.lattice.handleUp(pointer.worldX, pointer.worldY);
     });
 
     this.refresh();
@@ -314,63 +323,6 @@ export class BastionScene extends Phaser.Scene {
     return { box, chip, label, rect: { x, y, w, h } };
   }
 
-  private buildLattice(): void {
-    const children: Phaser.GameObjects.GameObject[] = [];
-    const top = 16 + BTN_H + 16 + BTN_H + 20;
-    const panel = this.add
-      .rectangle(24, top, GAME_WIDTH - 48, GAME_HEIGHT - top - 24, Palette.panel, 0.96)
-      .setStrokeStyle(2, Palette.panelEdge)
-      .setOrigin(0, 0);
-    children.push(panel);
-    children.push(
-      this.add
-        .text(GAME_WIDTH / 2, top + 36, "Ember Lattice", { font: FONT_TITLE, color: "#e8c547" })
-        .setOrigin(0.5, 0),
-    );
-    children.push(
-      this.add
-        .text(GAME_WIDTH / 2, top + 88, "The Lattice is not yet open — coming soon.", {
-          font: FONT_BODY,
-          color: "#e8e0d4",
-        })
-        .setOrigin(0.5, 0),
-    );
-    children.push(
-      this.add
-        .text(GAME_WIDTH / 2, top + 120, "Account points and tag-scoped nodes will live here.", {
-          font: FONT_BTN_SM,
-          color: "#8a8490",
-        })
-        .setOrigin(0.5, 0),
-    );
-
-    const g = this.add.graphics();
-    const cx = GAME_WIDTH / 2;
-    const cy = top + 300;
-    g.lineStyle(2, Palette.stoneLight, 1);
-    g.lineBetween(cx - 90, cy + 50, cx, cy - 40);
-    g.lineBetween(cx + 90, cy + 50, cx, cy - 40);
-    g.lineBetween(cx - 90, cy + 50, cx + 90, cy + 50);
-    g.fillStyle(Palette.goldDim, 1);
-    g.fillCircle(cx, cy - 40, 16);
-    g.fillStyle(Palette.stone, 1);
-    g.fillCircle(cx - 90, cy + 50, 14);
-    g.fillCircle(cx + 90, cy + 50, 14);
-    g.lineStyle(2, Palette.goldDim, 1);
-    g.strokeCircle(cx, cy - 40, 16);
-    g.lineStyle(2, Palette.stoneLight, 1);
-    g.strokeCircle(cx - 90, cy + 50, 14);
-    g.strokeCircle(cx + 90, cy + 50, 14);
-    children.push(g);
-    children.push(
-      this.add
-        .text(cx, cy - 70, "0 points", { font: FONT_BTN_SM, color: "#8a8490" })
-        .setOrigin(0.5),
-    );
-
-    this.latticeRoot = this.add.container(0, 0, children).setVisible(false);
-  }
-
   private handleTap(x: number, y: number): void {
     if (this.help.visible) {
       this.help.handleTap(x, y);
@@ -530,20 +482,21 @@ export class BastionScene extends Phaser.Scene {
     this.loadoutRoot.setVisible(onLoadout);
     this.stash.root.setVisible(onStash);
     this.forge.root.setVisible(onForge);
-    this.latticeRoot.setVisible(onLattice);
+    this.lattice.root.setVisible(onLattice);
     this.tabMarks?.loadout.setVisible(onLoadout);
     this.tabMarks?.stash.setVisible(onStash);
     this.tabMarks?.forge.setVisible(onForge);
     this.tabMarks?.lattice.setVisible(onLattice);
     if (onForge) this.forge.refresh();
     if (onStash) this.stash.refresh();
+    if (onLattice) this.lattice.refresh();
     if (!onLoadout) return;
 
     const def = TOWERS[this.selected];
     const profile = getProfile();
     const loadout = profile.loadouts[this.selected];
     const previewSigil = makeGem("sigil", def.starterSigil);
-    const resolved = resolveLoadout(def, previewSigil, loadout?.runes ?? [], loadout?.relics ?? []);
+    const resolved = resolveLoadout(def, previewSigil, loadout?.runes ?? [], loadout?.relics ?? [], latticeForTags(SIGILS[def.starterSigil].tags));
 
     this.sigilLabel.setText(`${def.name}  ·  default Sigil  ${SIGILS[def.starterSigil].name}`);
     this.statsText.setText(formatPreview(resolved));
@@ -659,7 +612,7 @@ export class BastionScene extends Phaser.Scene {
     const profile = getProfile();
     const loadout = profile.loadouts[this.selected];
     const def = TOWERS[this.selected];
-    const preview = resolveLoadout(def, makeGem("sigil", def.starterSigil), loadout?.runes ?? [], loadout?.relics ?? []);
+    const preview = resolveLoadout(def, makeGem("sigil", def.starterSigil), loadout?.runes ?? [], loadout?.relics ?? [], latticeForTags(SIGILS[def.starterSigil].tags));
     return {
       ready: true,
       scene: "bastion",
@@ -720,6 +673,8 @@ export class BastionScene extends Phaser.Scene {
       depthSelect: this.depthSelect.visible
         ? { depths: this.depthSelect.depthRects, enter: this.depthSelect.enterRect, close: this.depthSelect.closeRect }
         : null,
+      latticeNodes: this.lattice.nodeRects(),
+      latticeView: this.lattice.viewRect,
       forgeRelics: this.forge.root.visible ? this.forge.relicRects() : [],
       forgeCurrencies: this.forge.root.visible ? this.forge.currencyRects() : [],
       forgeApply: this.forge.applyRect,
@@ -764,6 +719,16 @@ export class BastionScene extends Phaser.Scene {
         if (id in profile.currency) profile.currency[id as keyof typeof profile.currency] += qty;
         persistProfile();
         this.refresh();
+      },
+      givePoints: (n = 1) => {
+        getProfile().unspentPoints += n;
+        persistProfile();
+        this.refresh();
+      },
+      allocateNode: (id: string) => {
+        const result = tryAllocate(id);
+        this.refresh();
+        return result;
       },
       getProfile: () => getProfile(),
       forceOutcome: () => undefined,

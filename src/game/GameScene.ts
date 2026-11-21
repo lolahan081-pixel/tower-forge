@@ -18,6 +18,7 @@ import {
   isInBounds,
 } from "../data/map";
 import { isSigilId, SIGILS } from "../data/sigils";
+import { latticeForTags } from "../data/lattice";
 import { grantSocketXp, resolveLoadout, sigilFitsFrame, type ResolvedAttack } from "../data/stats";
 import { TOWERS, isTowerId, type TowerId } from "../data/towers";
 import { Palette } from "../palette";
@@ -297,7 +298,13 @@ export class GameScene extends Phaser.Scene {
       x,
       y,
       sockets,
-      resolved: resolveLoadout(def, sockets[0] ?? null, sockets.slice(1), getProfile().loadouts[towerId]?.relics ?? []),
+      resolved: resolveLoadout(
+        def,
+        sockets[0] ?? null,
+        sockets.slice(1),
+        getProfile().loadouts[towerId]?.relics ?? [],
+        latticeForTags(SIGILS[def.starterSigil].tags),
+      ),
       cooldown: 0,
       sprite,
       rangeGfx,
@@ -351,7 +358,8 @@ export class GameScene extends Phaser.Scene {
   private recompute(tower: PlacedTower): void {
     const loadout = getProfile().loadouts[tower.id];
     const sigil = tower.sockets[0] && tower.sockets[0].kind === "sigil" ? tower.sockets[0] : null;
-    tower.resolved = resolveLoadout(TOWERS[tower.id], sigil, tower.sockets.slice(1), loadout?.relics ?? []);
+    const tags = sigil && isSigilId(sigil.defId) ? SIGILS[sigil.defId].tags : [];
+    tower.resolved = resolveLoadout(TOWERS[tower.id], sigil, tower.sockets.slice(1), loadout?.relics ?? [], latticeForTags(tags));
     this.syncBadge(tower);
     if (this.panel.openTower === tower) this.panel.refresh();
   }
