@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { ENEMIES, type EnemyId } from "../data/enemies";
 import { makeGem, type GemInstance } from "../data/items";
+import { getProfile, persistProfile } from "../data/profile";
 import {
   GAME_HEIGHT,
   GAME_WIDTH,
@@ -22,41 +23,15 @@ import { EnemyPool, type Enemy } from "../sim/EnemyPool";
 import { PATH } from "../sim/path";
 import { BeamPool, NovaPool, ProjectilePool } from "../sim/ProjectilePool";
 import { WaveController } from "../sim/WaveController";
+import type { GameSnapshot, GemSnap } from "../debug";
 import { HelpOverlay } from "./HelpOverlay";
 import { Hud, pointerToCell } from "./Hud";
-import { createStarterInventory, TowerPanel } from "./TowerPanel";
+import { SigilPanel } from "./SigilPanel";
 import { drawBoard } from "./drawMap";
 import { generateTextures } from "./textures";
 import type { PlacedTower } from "./towerState";
 
 export type Outcome = "playing" | "won" | "lost";
-
-export type GemSnap = { uid: string; defId: string; kind: string; level: number; xp: number };
-
-export type GameSnapshot = {
-  ready: boolean;
-  gold: number;
-  lives: number;
-  wave: number;
-  waveActive: boolean;
-  enemiesAlive: number;
-  towers: number;
-  projectiles: number;
-  peakProjectiles: number;
-  lastVolleyCount: number;
-  fps: number;
-  outcome: Outcome;
-  selected: TowerId;
-  panelOpen: boolean;
-  helpVisible: boolean;
-  inventory: GemSnap[];
-  towerSockets: {
-    col: number;
-    row: number;
-    sockets: (GemSnap | null)[];
-    resolved: ResolvedAttack;
-  }[];
-};
 
 export class GameScene extends Phaser.Scene {
   private gold = STARTING_GOLD;
@@ -65,14 +40,13 @@ export class GameScene extends Phaser.Scene {
   private selected: TowerId = "ember-spire";
   private towers: PlacedTower[] = [];
   private occupied = new Set<string>();
-  private inventory: GemInstance[] = [];
   private enemies!: EnemyPool;
   private projectiles!: ProjectilePool;
   private beams!: BeamPool;
   private novas!: NovaPool;
   private waves = new WaveController();
   private hud!: Hud;
-  private panel!: TowerPanel;
+  private panel!: SigilPanel;
   private help!: HelpOverlay;
   private lastTower: PlacedTower | null = null;
   private hover!: Phaser.GameObjects.Rectangle;
@@ -90,9 +64,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   create(): void {
+    this.resetBattleState();
     generateTextures(this);
     drawBoard(this);
-    this.inventory = createStarterInventory();
 
     this.enemies = new EnemyPool(this, 64);
     this.projectiles = new ProjectilePool(this, 96);
@@ -119,16 +93,20 @@ export class GameScene extends Phaser.Scene {
       () => {
         this.openInscribe();
       },
+      () => {
+        this.returnToBastion();
+      },
     );
 
     this.help = new HelpOverlay(this, () => {
       this.hudDirty = true;
-    });
+    }, "battle");
 
-    this.panel = new TowerPanel(this, {
-      inventory: () => this.inventory,
-      socket: (tower, slot, uid) => this.trySocket(tower, slot, uid),
-      unsocket: (tower, slot) => this.tryUnsocket(tower, slot),
+    this.panel = new SigilPanel(this, {
+      inventory: () => getProfile().sigilInventory,
+      loadoutRunes: (tower) => getProfile().loadouts[tower.id]?.runes ?? [],
+      swap: (tower, uid) => this.trySwapSigil(tower, uid),
+      unsocket: (tower) => this.tryUnsocketSigil(tower),
     });
 
     this.input.on("pointermove", (pointer: Phaser.Input.Pointer) => {
@@ -152,13 +130,7 @@ export class GameScene extends Phaser.Scene {
         this.panel.show(existing);
         return;
       }
-      if (this.tryBuild(cell.col, cell.row, this.selected)) {
-        const built = this.towerAt(cell.col, cell.row);
-        if (built) {
-          this.lastTower = built;
-          this.panel.show(built);
-        }
-      }
+      this.tryBuild(cell.col, cell.row, this.selected);
     });
 
     this.input.keyboard?.on("keydown-ONE", () => {
@@ -180,6 +152,27 @@ export class GameScene extends Phaser.Scene {
     this.exposeDebugHook();
     if (this.help.shouldShow()) this.help.show();
     else this.help.hide();
+  }
+
+  private resetBattleState(): void {
+    this.gold = STARTING_GOLD;
+    this.lives = STARTING_LIVES;
+    this.outcome = "playing";
+    this.selected = "ember-spire";
+    this.towers = [];
+    this.occupied = new Set();
+    this.lastTower = null;
+    this.hudDirty = true;
+    this.fpsEma = 60;
+    this.stressMode = false;
+    this.peakProjectiles = 0;
+    this.lastVolleyCount = 0;
+    this.waves = new WaveController();
+  }
+
+  private returnToBastion(): void {
+    persistProfile();
+    this.scene.start("bastion");
   }
 
   private openInscribe(): void {
@@ -238,9 +231,8 @@ export class GameScene extends Phaser.Scene {
     if (this.gold < def.cost) return false;
 
     const { x, y } = cellCenter(col, row);
-    const sockets: (GemInstance | null)[] = [];
-    for (let i = 0; i < def.sockets; i++) sockets.push(null);
-    sockets[0] = makeGem("sigil", def.starterSigil);
+    const runes = getProfile().loadouts[towerId]?.runes ?? [];
+    const sockets: (GemInstance | null)[] = [makeGem("sigil", def.starterSigil), ...runes];
     const sprite = this.add.image(x, y, def.id).setDepth(4);
     const rangeGfx = this.add.graphics().setDepth(2).setVisible(false);
     rangeGfx.lineStyle(1, def.accent, 0.35);
@@ -276,57 +268,32 @@ export class GameScene extends Phaser.Scene {
     return true;
   }
 
-  trySocket(tower: PlacedTower, slot: number, uid: string): boolean {
-    if (slot < 0 || slot >= tower.sockets.length) return false;
-    const incoming = this.takeGemByUid(uid, tower);
+  trySwapSigil(tower: PlacedTower, uid: string): boolean {
+    const inv = getProfile().sigilInventory;
+    const invIndex = inv.findIndex((g) => g.uid === uid);
+    if (invIndex < 0) return false;
+    const incoming = inv.splice(invIndex, 1)[0];
     if (!incoming) return false;
-
-    if (incoming.kind === "sigil") {
-      if (!isSigilId(incoming.defId) || !sigilFitsFrame(SIGILS[incoming.defId].tags, TOWERS[tower.id].tags)) {
-        this.inventory.push(incoming);
-        return false;
-      }
-      for (let i = 0; i < tower.sockets.length; i++) {
-        const g = tower.sockets[i];
-        if (i !== slot && g && g.kind === "sigil") {
-          this.inventory.push(g);
-          tower.sockets[i] = null;
-        }
-      }
+    if (incoming.kind !== "sigil" || !isSigilId(incoming.defId) || !sigilFitsFrame(SIGILS[incoming.defId].tags, TOWERS[tower.id].tags)) {
+      inv.push(incoming);
+      return false;
     }
-
-    const occupant = tower.sockets[slot];
-    if (occupant) this.inventory.push(occupant);
-    tower.sockets[slot] = incoming;
+    const occupant = tower.sockets[0];
+    if (occupant) inv.push(occupant);
+    tower.sockets[0] = incoming;
+    persistProfile();
     this.recompute(tower);
     return true;
   }
 
-  tryUnsocket(tower: PlacedTower, slot: number): boolean {
-    if (slot < 0 || slot >= tower.sockets.length) return false;
-    const gem = tower.sockets[slot];
+  tryUnsocketSigil(tower: PlacedTower): boolean {
+    const gem = tower.sockets[0];
     if (!gem) return false;
-    tower.sockets[slot] = null;
-    this.inventory.push(gem);
+    tower.sockets[0] = null;
+    getProfile().sigilInventory.push(gem);
+    persistProfile();
     this.recompute(tower);
     return true;
-  }
-
-  /** Pull a gem out of inventory, or off this same tower if it is already socketed. */
-  private takeGemByUid(uid: string, tower: PlacedTower): GemInstance | null {
-    const invIndex = this.inventory.findIndex((g) => g.uid === uid);
-    if (invIndex >= 0) {
-      const [gem] = this.inventory.splice(invIndex, 1);
-      return gem ?? null;
-    }
-    for (let i = 0; i < tower.sockets.length; i++) {
-      const g = tower.sockets[i];
-      if (g && g.uid === uid) {
-        tower.sockets[i] = null;
-        return g;
-      }
-    }
-    return null;
   }
 
   private recompute(tower: PlacedTower): void {
@@ -556,6 +523,7 @@ export class GameScene extends Phaser.Scene {
   getSnapshot(): GameSnapshot {
     return {
       ready: true,
+      scene: "game",
       gold: this.gold,
       lives: this.lives,
       wave: this.waves.waveNumber,
@@ -570,7 +538,7 @@ export class GameScene extends Phaser.Scene {
       selected: this.selected,
       panelOpen: this.panel.visible,
       helpVisible: this.help.visible,
-      inventory: this.inventory.map(snapGem),
+      inventory: getProfile().sigilInventory.map(snapGem),
       towerSockets: this.towers.map((t) => ({
         col: t.col,
         row: t.row,
@@ -583,6 +551,7 @@ export class GameScene extends Phaser.Scene {
   private exposeDebugHook(): void {
     const api = {
       ready: true,
+      scene: "game" as const,
       placeTower: (col: number, row: number, towerId?: string): boolean => {
         const id = towerId && isTowerId(towerId) ? towerId : this.selected;
         return this.tryBuild(col, row, id);
@@ -609,6 +578,7 @@ export class GameScene extends Phaser.Scene {
       },
       getUiRects: () => ({
         game: { w: GAME_WIDTH, h: GAME_HEIGHT },
+        scene: "game" as const,
         helpVisible: this.help.visible,
         helpDismiss: this.help.dismissRect(),
         ...this.hud.rects(),
@@ -617,11 +587,13 @@ export class GameScene extends Phaser.Scene {
       socketByDef: (col: number, row: number, defId: string): boolean => {
         const t = this.towerAt(col, row);
         if (!t) return false;
-        const gem = this.inventory.find((g) => g.defId === defId);
+        const gem = getProfile().sigilInventory.find((g) => g.defId === defId);
         if (!gem) return false;
-        const slot = firstOpenSlot(t, gem.kind === "sigil");
-        if (slot < 0) return false;
-        return this.trySocket(t, slot, gem.uid);
+        return this.trySwapSigil(t, gem.uid);
+      },
+      getProfile: () => getProfile(),
+      forceOutcome: (outcome: "won" | "lost") => {
+        this.setOutcome(outcome);
       },
     };
     window.__towerForge = api;
@@ -649,16 +621,6 @@ export class GameScene extends Phaser.Scene {
 
 function snapGem(g: GemInstance): GemSnap {
   return { uid: g.uid, defId: g.defId, kind: g.kind, level: g.level, xp: g.xp };
-}
-
-function firstOpenSlot(tower: PlacedTower, preferFront: boolean): number {
-  if (preferFront) {
-    for (let i = 0; i < tower.sockets.length; i++) if (!tower.sockets[i]) return i;
-  } else {
-    for (let i = 1; i < tower.sockets.length; i++) if (!tower.sockets[i]) return i;
-    if (!tower.sockets[0]) return 0;
-  }
-  return -1;
 }
 
 function firstBuildableNearPath(occupied: Set<string>): { col: number; row: number } {

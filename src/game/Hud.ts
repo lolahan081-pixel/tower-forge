@@ -17,16 +17,20 @@ export class Hud {
   private readonly inscribeLabel: Phaser.GameObjects.Text;
   private readonly overlay: Phaser.GameObjects.Rectangle;
   private readonly overlayText: Phaser.GameObjects.Text;
+  private readonly returnBtn: Phaser.GameObjects.Rectangle;
+  private readonly returnLabel: Phaser.GameObjects.Text;
   private readonly selectMarks: Phaser.GameObjects.Rectangle[] = [];
   private readonly towerRects: Record<string, UiRect> = {};
   readonly startRect: UiRect;
   readonly inscribeRect: UiRect;
+  readonly returnRect: UiRect;
 
   constructor(
     scene: Phaser.Scene,
     onSelect: (id: TowerId) => void,
     onStart: () => void,
     onInscribe: () => void,
+    onReturn: () => void,
   ) {
     const style = { font: FONT_HUD, color: "#e8e0d4" };
     this.goldText = scene.add.text(16, HUD_Y + 6, "", style).setDepth(20);
@@ -75,7 +79,7 @@ export class Hud {
       .setDepth(19)
       .setInteractive({ useHandCursor: true });
     this.inscribeLabel = scene.add
-      .text(insX + actW / 2, btnY + BTN_H / 2, "INSCRIBE", { font: FONT_BTN, color: "#e8c547" })
+      .text(insX + actW / 2, btnY + BTN_H / 2, "SIGIL", { font: FONT_BTN, color: "#e8c547" })
       .setOrigin(0.5)
       .setDepth(20);
     this.inscribeBtn.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
@@ -116,6 +120,28 @@ export class Hud {
       .setOrigin(0.5)
       .setDepth(41)
       .setVisible(false);
+
+    const retW = 320;
+    const retX = (GAME_WIDTH - retW) / 2;
+    const retY = (GAME_HEIGHT - HUD_HEIGHT) / 2 + 80;
+    this.returnRect = { x: retX, y: retY, w: retW, h: BTN_H };
+    this.returnBtn = scene.add
+      .rectangle(retX + retW / 2, retY + BTN_H / 2, retW, BTN_H, 0x2a2014, 1)
+      .setStrokeStyle(2, Palette.gold)
+      .setDepth(42)
+      .setInteractive({ useHandCursor: true })
+      .setVisible(false);
+    this.returnLabel = scene.add
+      .text(retX + retW / 2, retY + BTN_H / 2, "RETURN TO BASTION", { font: FONT_BTN, color: "#e8c547" })
+      .setOrigin(0.5)
+      .setDepth(43)
+      .setVisible(false);
+    this.returnBtn.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+      pointer.event.stopPropagation();
+      onReturn();
+    });
+    this.returnBtn.on("pointerover", () => this.returnBtn.setStrokeStyle(3, Palette.goldBright));
+    this.returnBtn.on("pointerout", () => this.returnBtn.setStrokeStyle(2, Palette.gold));
   }
 
   refresh(args: {
@@ -148,6 +174,7 @@ export class Hud {
     this.inscribeBtn.setStrokeStyle(2, args.canInscribe ? Palette.goldDim : Palette.stone);
     this.inscribeLabel.setColor(args.canInscribe ? "#e8c547" : "#8a8490");
 
+    const ended = args.outcome === "won" || args.outcome === "lost";
     if (args.outcome === "won") {
       this.overlay.setVisible(true);
       this.overlayText.setVisible(true).setColor("#e8c547").setText("The path holds.\nYou win.");
@@ -158,14 +185,16 @@ export class Hud {
       this.overlay.setVisible(false);
       this.overlayText.setVisible(false);
     }
+    this.returnBtn.setVisible(ended);
+    this.returnLabel.setVisible(ended);
   }
 
   isOverHud(worldY: number): boolean {
     return worldY >= HUD_Y;
   }
 
-  rects(): { startWave: UiRect; inscribe: UiRect; towers: Record<string, UiRect> } {
-    return { startWave: this.startRect, inscribe: this.inscribeRect, towers: this.towerRects };
+  rects(): { startWave: UiRect; inscribe: UiRect; towers: Record<string, UiRect>; returnToBastion: UiRect } {
+    return { startWave: this.startRect, inscribe: this.inscribeRect, towers: this.towerRects, returnToBastion: this.returnRect };
   }
 }
 

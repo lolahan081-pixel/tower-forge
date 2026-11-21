@@ -16,6 +16,7 @@ export class HelpOverlay {
   constructor(
     scene: Phaser.Scene,
     private readonly onDismissCb: () => void,
+    page: "bastion" | "battle" = "battle",
   ) {
     const dim = scene.add
       .rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, Palette.overlay, 0.82)
@@ -36,11 +37,18 @@ export class HelpOverlay {
       .text(
         cx,
         cy - 90,
-        [
-          "Build — Choose a frame, then tap a stone cell beside the path. A new frame starts with a starter Sigil and will fire on its own.",
-          "Inscribe — Tap a frame, or Inscribe, to open sockets. Tap a gem, then a socket. Tap Unsocket to return a gem.",
-          "Hold the gate — Tap Start Wave to send the Hollow down the path. Kills grant gold and gem XP.",
-        ].join("\n\n"),
+        (page === "bastion"
+          ? [
+              "Prepare — Socket Runes into a frame loadout here. Every tower of that type uses this loadout in battle. Relics and the Ember Lattice come later.",
+              "Breach — Enter Breach to hold the gate. Built frames start with a starter Sigil. In battle you can swap only the main Sigil.",
+              "Hold the gate — Start Wave to send the Hollow down the path. After a win or loss, return to the Bastion.",
+            ]
+          : [
+              "Build — Choose a frame, then tap a stone cell beside the path. A new frame starts with a starter Sigil and uses your Bastion loadout.",
+              "Sigil — Tap a frame, or Sigil, to swap the main skill gem. Loadout Runes are shown read-only; incompatible ones sit inactive.",
+              "Hold the gate — Tap Start Wave. After a win or loss, return to the Bastion to change Runes.",
+            ]
+        ).join("\n\n"),
         {
           font: FONT_BODY,
           color: "#e8e0d4",

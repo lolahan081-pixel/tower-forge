@@ -28,10 +28,10 @@
         -webkit-touch-callout: none;
         font-family: Georgia, "Times New Roman", serif;
       }
+      /* Phaser Scale.CENTER_BOTH positions the canvas with margins.
+         Do not also flex-center #app — the two offsets stack and shift the game right. */
       #app {
-        display: flex;
-        align-items: center;
-        justify-content: center;
+        position: relative;
         width: 100%;
         height: 100%;
         touch-action: none;

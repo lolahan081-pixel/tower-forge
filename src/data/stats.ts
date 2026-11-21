@@ -126,3 +126,12 @@ export function grantSocketXp(sockets: readonly (GemInstance | null)[], amount: 
   }
   return changed;
 }
+
+export function resolveLoadout(
+  frame: TowerDef,
+  sigil: GemInstance | null,
+  runes: readonly (GemInstance | null)[],
+): ResolvedAttack {
+  const sockets: (GemInstance | null)[] = [sigil, ...runes];
+  return resolveAttack(frame, sockets);
+}

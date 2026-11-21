@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { GAME_HEIGHT, GAME_WIDTH } from "./data/map";
+import { BastionScene } from "./game/BastionScene";
 import { GameScene } from "./game/GameScene";
 import "./debug";
 
@@ -11,7 +12,7 @@ const config: Phaser.Types.Core.GameConfig = {
   width: GAME_WIDTH,
   height: GAME_HEIGHT,
   backgroundColor: "#0b0a0c",
-  scene: [GameScene],
+  scene: [BastionScene, GameScene],
   banner: false,
   audio: { noAudio: true },
   render: {
