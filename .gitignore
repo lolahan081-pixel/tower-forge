@@ -1,6 +1,8 @@
 node_modules
 dist
+screenshots
 .DS_Store
 *.log
 playwright-report
 test-results
+.vite
