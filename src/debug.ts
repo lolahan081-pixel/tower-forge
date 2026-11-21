@@ -91,6 +91,8 @@ export type TowerForgeDebug = {
   collectSpoils?: () => void;
   giveRelic?: (defId?: string, rarity?: "normal" | "magic" | "rare") => unknown;
   guaranteeDrop?: (kind?: "off" | "relic" | "rune" | "sigil" | "currency") => void;
+  shopOffers?: () => unknown[];
+  buyShop?: (index: number) => boolean;
 };
 
 declare global {

@@ -28,6 +28,8 @@ import { WaveController } from "../sim/WaveController";
 import type { GameSnapshot, GemSnap } from "../debug";
 import { HelpOverlay } from "./HelpOverlay";
 import { Hud, pointerToCell } from "./Hud";
+import { rollShopOffers } from "../data/shop";
+import { ShopOverlay } from "./ShopOverlay";
 import { SigilPanel } from "./SigilPanel";
 import { SpoilsOverlay } from "./SpoilsOverlay";
 import { drawBoard } from "./drawMap";
@@ -56,6 +58,8 @@ export class GameScene extends Phaser.Scene {
   private spoils: SpoilsItem[] = [];
   private depth = 1;
   private dropGuarantee: "off" | "relic" | "rune" | "sigil" | "currency" = "off";
+  private shop!: ShopOverlay;
+  private timeScale = 1;
   private hover!: Phaser.GameObjects.Rectangle;
   private rangePreview!: Phaser.GameObjects.Graphics;
   private hudDirty = true;
@@ -120,6 +124,21 @@ export class GameScene extends Phaser.Scene {
       this.spoils = [];
       this.hudDirty = true;
     });
+    this.shop = new ShopOverlay(
+      this,
+      () => this.gold,
+      (amount) => {
+        if (this.gold < amount) return false;
+        this.gold -= amount;
+        this.hudDirty = true;
+        return true;
+      },
+      () => {
+        this.hudDirty = true;
+      },
+    );
+    const scaleParam = Number(new URLSearchParams(window.location.search).get("timescale") ?? "1");
+    this.timeScale = Number.isFinite(scaleParam) && scaleParam > 0 ? Math.min(12, scaleParam) : 1;
 
     this.input.on("pointermove", (pointer: Phaser.Input.Pointer) => {
       this.updateHover(pointer.worldX, pointer.worldY);
@@ -132,6 +151,10 @@ export class GameScene extends Phaser.Scene {
       }
       if (this.spoilsOverlay.visible) {
         this.spoilsOverlay.handleTap(pointer.worldX, pointer.worldY);
+        return;
+      }
+      if (this.shop.visible) {
+        this.shop.handleTap(pointer.worldX, pointer.worldY);
         return;
       }
       if (this.panel.visible) {
@@ -205,7 +228,7 @@ export class GameScene extends Phaser.Scene {
 
 
   update(time: number, delta: number): void {
-    const dtMs = delta;
+    const dtMs = delta * this.timeScale;
     const dtSec = dtMs * 0.001;
     const instantFps = this.game.loop.actualFps;
     if (Number.isFinite(instantFps) && instantFps > 0) {
@@ -225,6 +248,7 @@ export class GameScene extends Phaser.Scene {
       if (this.waves.endIfClear(this.enemies.livingCount)) {
         this.hudDirty = true;
         if (!this.waves.hasMoreWaves) this.setOutcome("won");
+        else this.shop.show(rollShopOffers());
       }
     } else {
       this.beams.step(dtSec);
@@ -284,6 +308,7 @@ export class GameScene extends Phaser.Scene {
 
   tryStartWave(): boolean {
     if (this.outcome !== "playing") return false;
+    if (this.shop.visible) this.shop.hide();
     if (!this.waves.startNext()) return false;
     this.hudDirty = true;
     return true;
@@ -645,6 +670,8 @@ export class GameScene extends Phaser.Scene {
       guaranteeDrop: (kind: "off" | "relic" | "rune" | "sigil" | "currency" = "relic") => {
         this.dropGuarantee = kind;
       },
+      shopOffers: () => this.shop.currentOffers,
+      buyShop: (index: number) => this.shop.buy(index),
     };
     window.__towerForge = api;
   }
