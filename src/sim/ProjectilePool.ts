@@ -12,6 +12,7 @@ export class Projectile {
   vx = 0;
   vy = 0;
   damage = 0;
+  convertToCold = 0;
   speed = 0;
   life = 0;
   pierceLeft = 0;
@@ -43,11 +44,13 @@ export class Projectile {
     texture: string,
     tint: number,
     ownerIndex: number,
+    convertToCold = 0,
   ): void {
     this.alive = true;
     this.x = x;
     this.y = y;
     this.damage = damage;
+    this.convertToCold = convertToCold;
     this.speed = speed;
     this.vx = vx;
     this.vy = vy;
@@ -173,9 +176,10 @@ export class ProjectilePool {
     texture: string,
     tint: number,
     ownerIndex: number,
+    convertToCold = 0,
   ): Projectile {
     const proj = this.free.pop() ?? new Projectile(this.scene);
-    proj.reset(x, y, target, damage, speed, vx, vy, pierce, chain, home, texture, tint, ownerIndex);
+    proj.reset(x, y, target, damage, speed, vx, vy, pierce, chain, home, texture, tint, ownerIndex, convertToCold);
     this.active.push(proj);
     return proj;
   }

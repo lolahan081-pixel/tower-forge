@@ -105,6 +105,8 @@ export type TowerForgeDebug = {
   guaranteeDrop?: (kind?: "off" | "relic" | "rune" | "sigil" | "currency") => void;
   shopOffers?: () => unknown[];
   buyShop?: (index: number) => boolean;
+  guaranteeRarity?: (rarity?: "off" | "normal" | "magic" | "rare" | "unique") => void;
+  spawnModified?: (rarity?: "normal" | "magic" | "rare" | "unique") => unknown;
 };
 
 declare global {

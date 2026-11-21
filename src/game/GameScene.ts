@@ -3,6 +3,7 @@ import { ENEMIES, type EnemyId } from "../data/enemies";
 import { makeGem, type GemInstance } from "../data/items";
 import { rollKillDrops, type SpoilsItem } from "../data/drops";
 import { buildBreachWaves, goldScale, hpScale, livesForDepth, speedScale } from "../data/depths";
+import { rarityGoldMult, rollEnemyPack, type EnemyRarity } from "../data/enemyMods";
 import { awardBreachClear, collectSpoils, getProfile, persistProfile } from "../data/profile";
 import { makeRelic, type RelicId, type RelicRarity } from "../data/relics";
 import {
@@ -23,7 +24,7 @@ import { grantSocketXp, resolveLoadout, sigilFitsFrame, type ResolvedAttack } fr
 import { TOWERS, isTowerId, type TowerId } from "../data/towers";
 import { Palette } from "../palette";
 import { collectInRadius, findChainTarget, findNearestToExit } from "../sim/combat";
-import { EnemyPool, type Enemy } from "../sim/EnemyPool";
+import { EnemyPool, tickEnemyAuras, type Enemy } from "../sim/EnemyPool";
 import { PATH } from "../sim/path";
 import { BeamPool, NovaPool, ProjectilePool } from "../sim/ProjectilePool";
 import { WaveController } from "../sim/WaveController";
@@ -60,6 +61,7 @@ export class GameScene extends Phaser.Scene {
   private spoils: SpoilsItem[] = [];
   private depth = 1;
   private dropGuarantee: "off" | "relic" | "rune" | "sigil" | "currency" = "off";
+  private forceRarity: "off" | EnemyRarity = "off";
   private shop!: ShopOverlay;
   private timeScale = 1;
   private hover!: Phaser.GameObjects.Rectangle;
@@ -211,6 +213,7 @@ export class GameScene extends Phaser.Scene {
     this.lastTower = null;
     this.spoils = [];
     this.dropGuarantee = "off";
+    this.forceRarity = "off";
     this.hudDirty = true;
     this.fpsEma = 60;
     this.stressMode = false;
@@ -377,18 +380,23 @@ export class GameScene extends Phaser.Scene {
     return undefined;
   }
 
-  private spawnEnemy(id: EnemyId): void {
-    const rarity = id === "hollow-sovereign" ? "unique" : "normal";
+  private spawnEnemy(id: EnemyId, forced?: EnemyRarity): void {
+    const pack =
+      id === "hollow-sovereign"
+        ? { rarity: "unique" as const, mods: [] }
+        : rollEnemyPack(this.depth, forced ?? (this.forceRarity === "off" ? undefined : this.forceRarity));
     this.enemies.spawn(ENEMIES[id], {
       hpMult: hpScale(this.depth),
       speedMult: speedScale(this.depth),
-      goldMult: goldScale(this.depth),
-      rarity,
+      goldMult: goldScale(this.depth) * rarityGoldMult(pack.rarity),
+      rarity: pack.rarity,
+      mods: pack.mods,
     });
   }
 
   private stepEnemies(dtSec: number): void {
     const list = this.enemies.active;
+    tickEnemyAuras(list);
     for (let i = list.length - 1; i >= 0; i--) {
       const enemy = list[i];
       if (!enemy) continue;
@@ -461,6 +469,7 @@ export class GameScene extends Phaser.Scene {
         resolved.texture,
         tint,
         index,
+        resolved.convertToCold,
       );
     }
     this.lastVolleyCount = n;
@@ -472,7 +481,7 @@ export class GameScene extends Phaser.Scene {
     for (let i = 0; i < n; i++) {
       const e = this.novaHits[i];
       if (!e || !e.alive) continue;
-      if (e.applyDamage(resolved.damage)) this.killEnemy(e, index);
+      if (e.applyDamage(resolved.damage, resolved.convertToCold)) this.killEnemy(e, index);
     }
   }
 
@@ -492,7 +501,7 @@ export class GameScene extends Phaser.Scene {
       this.beams.spawn(x, y, current.x, current.y, tint, "spark-beam", 0.14);
       const nx = current.x;
       const ny = current.y;
-      const killed = current.applyDamage(resolved.damage);
+      const killed = current.applyDamage(resolved.damage, resolved.convertToCold);
       if (killed) this.killEnemy(current, index);
       x = nx;
       y = ny;
@@ -509,7 +518,7 @@ export class GameScene extends Phaser.Scene {
       proj.step(dtSec, enemies);
       const hit = proj.hitEnemy;
       if (hit && hit.alive) {
-        const killed = hit.applyDamage(proj.damage);
+        const killed = hit.applyDamage(proj.damage, proj.convertToCold);
         if (killed) this.killEnemy(hit, proj.ownerIndex);
       }
       if (!proj.alive) this.projectiles.releaseAt(i);
@@ -518,10 +527,27 @@ export class GameScene extends Phaser.Scene {
 
   private killEnemy(enemy: Enemy, ownerIndex: number): void {
     const reward = Math.round((enemy.def?.goldReward ?? 0) * (enemy.goldMult ?? 1));
+    const split = enemy.splitOnDeath && enemy.def && !this.stressMode;
+    const splitDef = split ? enemy.def : null;
+    const splitDist = enemy.dist;
+    const childHpMult = split && enemy.def ? Math.max(1, Math.round(enemy.maxHp * 0.4)) / enemy.def.maxHp : 0;
     const list = this.enemies.active;
     const idx = list.indexOf(enemy);
     if (idx >= 0) this.enemies.releaseAt(idx);
     else enemy.release();
+    if (splitDef) {
+      for (let s = 0; s < 2; s++) {
+        const child = this.enemies.spawn(splitDef, {
+          hpMult: childHpMult,
+          speedMult: speedScale(this.depth),
+          goldMult: 0,
+          rarity: "normal",
+          mods: [],
+          startDist: Math.max(0, splitDist + (s === 0 ? -12 : 12)),
+        });
+        child.splitOnDeath = false;
+      }
+    }
     if (this.stressMode) return;
     const tower = this.towers[ownerIndex];
     const goldMult = tower?.resolved.goldMult ?? 1;
@@ -643,8 +669,15 @@ export class GameScene extends Phaser.Scene {
       getState: (): GameSnapshot => this.getSnapshot(),
       firstBuildableNearPath: (): { col: number; row: number } => firstBuildableNearPath(this.occupied),
       stress: (count: number): { spawned: number; fps: number } => this.runStress(count),
-      enemyPositions: (): { x: number; y: number; progress: number; hp: number }[] => {
-        return this.enemies.active.map((e) => ({ x: e.x, y: e.y, progress: e.progress, hp: e.hp }));
+      enemyPositions: () => {
+        return this.enemies.active.map((e) => ({
+          x: e.x,
+          y: e.y,
+          progress: e.progress,
+          hp: e.hp,
+          rarity: e.rarity,
+          mods: e.mods.slice(),
+        }));
       },
       openPanel: (col: number, row: number): boolean => {
         const t = this.towerAt(col, row);
@@ -691,6 +724,15 @@ export class GameScene extends Phaser.Scene {
       },
       guaranteeDrop: (kind: "off" | "relic" | "rune" | "sigil" | "currency" = "relic") => {
         this.dropGuarantee = kind;
+      },
+      guaranteeRarity: (rarity: "off" | EnemyRarity = "rare") => {
+        this.forceRarity = rarity;
+      },
+      spawnModified: (rarity: EnemyRarity = "rare") => {
+        this.spawnEnemy("wretch", rarity);
+        const e = this.enemies.active[this.enemies.active.length - 1];
+        if (e) e.setDist(PATH.totalLen * 0.35);
+        return e ? { rarity: e.rarity, mods: e.mods.slice(), hp: e.hp } : null;
       },
       shopOffers: () => this.shop.currentOffers,
       buyShop: (index: number) => this.shop.buy(index),
