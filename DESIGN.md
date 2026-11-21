@@ -4,30 +4,28 @@ The last fortress that still guards a gate against the Hollow mist. Dark fantasy
 
 ## Pillars
 
-- **Frames, not guns.** A placed tower is a frame: sockets, base stats, and a tag (Spire = projectile, Font = spell, Totem = aura). A newly built frame auto-sockets a free starter Sigil (not taken from inventory) so it can fire immediately; without a Sigil it is inert.
-- **Prepare in the Bastion, fight in the Breach.** Runes (and later Relics and passives) are set on a pre-battle hub, per tower type. In battle only the main Sigil can be swapped.
-- **Data-first.** Towers, Sigils, Runes, enemies, waves, and (later) Relics, tree nodes, and enemy mods live in typed data files. Systems look them up by id.
-- **Modifiable stats.** Combat is a `ResolvedAttack` from `resolveAttack` / `resolveLoadout(frame, sigil, runes)`: damage, attack rate, range, plus projectile count, chain, pierce, and conversion. Later Relics and the Ember Lattice hook here too.
-- **Permanent ARPG account.** Everything the player owns lives in a profile, as plain serializable records with a unique `uid`. The save is local (`localStorage`) but portable — groundwork for a later authoritative server and trade.
+- **Frames, not guns.** A placed tower is a frame: sockets, base stats, and a tag (Spire = projectile, Font = spell, Totem = aura). A newly built frame auto-sockets a free starter Sigil so it can fire immediately; without a Sigil it is inert.
+- **Prepare in the Bastion, fight in the Breach.** Runes, Relics, and the Ember Lattice are set in the hub, per tower type. In battle only the main Sigil can be swapped.
+- **Data-first.** Towers, Sigils, Runes, Relics, affixes, currency, drops, Depths, Lattice nodes, enemies, and enemy mods live in typed data files and are looked up by id.
+- **Modifiable stats.** Combat is a `ResolvedAttack` from `resolveLoadout(frame, sigil, runes, relics, extra)`: damage, rate, range, projectiles, chain, pierce, conversion, and gold. Relics and Lattice nodes fold in here, scoped by tags where needed.
+- **Permanent ARPG account.** Items, gems, and currency are serializable records with a `uid`, saved in `localStorage`.
 - **Cheap to simulate.** Pooled enemies and projectiles. No per-frame allocations in the hot loop.
 
-## Core loop (now)
+## Core loop
 
-In the Bastion, socket Runes into a frame-type loadout → Enter Breach → place frames (each starts with a starter Sigil; every tower of that type uses the loadout) → optionally swap the main Sigil → start a wave → enemies walk a fixed path → the Sigil fires at the foe nearest the gate → kills grant gold and gem XP → win or lose, then return to the Bastion.
+In the Bastion, set Runes and Relics, bind Lattice nodes, and pick a Depth → Enter Breach (~10 waves, Unique boss on the last) → place frames → optionally swap the Sigil → fight, shop for basic gems between waves, auto-collect spoils → clear for account XP and Lattice points, unlock the next Depth, take spoils into the stash.
 
 ## Systems
 
-- **Sigils & Runes.** One active Sigil per frame, swapped in battle from the Sigil inventory. Runes live in the Bastion loadout (socket count = frame sockets minus 1) and apply only when every Rune tag is present on the current Sigil; otherwise they show as inactive. Free swapping in the hub. Gems gain XP from that frame’s kills and level up (damage scales). A shop between waves will sell basic Runes and level-1 Sigils; rare and high-level gems only drop.
-- **Breach & Depth.** A map is a Breach (~10 waves). Tier is Depth. Clearing grants account XP (passive points) and loot by Depth. Early Depths (1–3) stay relaxed: few mods, generous lives. Difficulty and rewards ramp with Depth. Breaches can later be crafted with enemy mods for more quantity and rarity.
-- **Relics.** A tower item, 1–2 slots per frame type (hub UI placeholders for now). Implicit plus random affixes. Normal / Magic (1 prefix + 1 suffix) / Rare (up to 3+3). Prefixes = damage, suffixes = utility. Affix tiers follow item level.
-- **Currency (fully random crafting).** Kindle Shard (normal→magic), Ash Mote (add affix to magic), Crown Cinder (magic→rare +1 affix), Sovereign Ember (add affix to rare), Rift Salt (remove one random affix, add one), Null Ash (remove a random affix), Blight Heart (corrupt, unpredictable, locks the item), Unbinding Tear (passive respec).
-- **Ember Lattice.** One passive tree. Regions for Spire, Font, and Totem, plus an economy center. Starts at ~40 nodes: small nodes, notables, and 2–3 keystones with sharp trade-offs. Bonuses are global, scoped by tags. Nodes, edges, and effects are data. Hub tab is a stub until the tree is built.
-- **Enemy mods.** Normal / Magic (1–2 mods) / Rare (3–4, mini-boss) / a Unique boss at the end of a Breach. Mods such as Swift, Cinderhide, Rimehide, Armoured, Regenerating, Splitter, Shielded, Hasted Aura, Proximal Ward. Rares carry a gold/ember outline. Scaling follows Depth.
+- **Sigils & Runes.** One active Sigil per frame, swapped in battle. Loadout Runes apply only when every Rune tag is on the current Sigil. Gems gain XP from that frame’s kills.
+- **Shop.** Between waves, basic Runes and level-1 Sigils for gold. Rare and high-level gems are drop-only.
+- **Relics & affixes.** 1–2 slots per frame type. Bases have implicits. Normal / Magic (1 prefix + 1 suffix) / Rare (up to 3+3). Prefixes = damage, suffixes = utility. Affix tiers follow item level. Equipped Relics change resolved stats.
+- **Drops.** Enemies drop Relics, Sigils, Runes, and currency (weights in data; rares and the boss drop more). Loot auto-collects into spoils, shown at the end of a Breach, then moves to the stash.
+- **Currency (fully random crafting).** Kindle Shard, Ash Mote, Crown Cinder, Sovereign Ember, Rift Salt, Null Ash, Blight Heart (corrupt, then locks), Unbinding Tear (Lattice respec). Used at the Ember Forge.
+- **Stash & Depth.** Stash lists all items, gems, and currency. Depths 1–10; early Depths (1–3) are relaxed. HP, count, gold, and pack-mod chance scale with Depth. Clearing awards account XP and unspent Lattice points.
+- **Ember Lattice.** ~40 nodes: Spire (projectile), Font (spell), Totem (aura, future-facing), and an economy center. Small nodes, notables, and three trade-off keystones (Ashen Volley, Sanguine Font, Crown of Cinders). Bind adjacent nodes with points. Bonuses are global or tag-scoped.
+- **Enemy rarity.** Normal / Magic (1–2 mods) / Rare (3–4, ember outline) / Unique boss (Hollow Sovereign). Mods: Fleet Ash, Cinder Hide, Rime Hide, Slag Plate, Smoldering, Cinder Split, Ward Shell, Haste Paean, Close Ward.
 
-## In scope now
+## Out of scope / deferred
 
-The Bastion hub (loadout + Lattice placeholder), persistent profile, two frames (Ember Spire, Blood Font), four Sigils, five Runes, battle Sigil swapping, starter Sigils, XP, and generic projectile / chain / nova / pierce behaviour. Totem frames wait for aura Sigils.
-
-## Out of scope now
-
-Shop, Relic items and affixes, currency crafting, stash UI, Breach/Depth progression, Ember Lattice tree, enemy rarity/mods, sound, multiple maps, multiplayer and trade.
+Sound, multiple maps, aura Totem frames, multiplayer and trade. Droppable/craftable Breach map items with quantity/rarity mods are deferred — Depth is selected directly.

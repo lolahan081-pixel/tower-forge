@@ -20,6 +20,8 @@ export type UiRects = {
   depthSelect?: { depths: UiRect[]; enter: UiRect; close: UiRect } | null;
   latticeNodes?: Record<string, UiRect>;
   latticeView?: UiRect;
+  shop?: { offers: UiRect[]; close: UiRect } | null;
+  spoilsTake?: UiRect | null;
   forgeRelics?: UiRect[];
   forgeCurrencies?: UiRect[];
   forgeApply?: UiRect;
@@ -107,6 +109,7 @@ export type TowerForgeDebug = {
   buyShop?: (index: number) => boolean;
   guaranteeRarity?: (rarity?: "off" | "normal" | "magic" | "rare" | "unique") => void;
   spawnModified?: (rarity?: "normal" | "magic" | "rare" | "unique") => unknown;
+  setTimeScale?: (scale: number) => void;
 };
 
 declare global {

@@ -84,6 +84,10 @@ export class ShopOverlay {
     return this.offers;
   }
 
+  get offerBuyRects(): UiRect[] {
+    return this.offerRects;
+  }
+
   show(offers: ShopOffer[]): void {
     this.offers = offers;
     this.gold = this.getGold();

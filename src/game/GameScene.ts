@@ -417,15 +417,18 @@ export class GameScene extends Phaser.Scene {
     for (let t = 0; t < this.towers.length; t++) {
       const tower = this.towers[t];
       if (!tower) continue;
-      if (tower.cooldown > 0) tower.cooldown -= dtSec;
+      tower.cooldown -= dtSec;
       if (enemies.length === 0) continue;
-      if (tower.cooldown > 0) continue;
       const resolved = tower.resolved;
       if (resolved.behaviour === "none" || resolved.attackRate <= 0) continue;
-      const target = findNearestToExit(tower.x, tower.y, resolved.range, enemies);
-      if (!target) continue;
-      this.fire(t, tower, resolved, target, enemies);
-      tower.cooldown = 1 / resolved.attackRate;
+      let safety = 0;
+      while (tower.cooldown <= 0 && safety < 8) {
+        safety += 1;
+        const target = findNearestToExit(tower.x, tower.y, resolved.range, enemies);
+        if (!target) break;
+        this.fire(t, tower, resolved, target, enemies);
+        tower.cooldown += 1 / resolved.attackRate;
+      }
     }
   }
 
@@ -699,6 +702,8 @@ export class GameScene extends Phaser.Scene {
         helpDismiss: this.help.dismissRect(),
         ...this.hud.rects(),
         panel: this.panel.visible ? this.panel.rects() : null,
+        shop: this.shop.visible ? { offers: this.shop.offerBuyRects, close: this.shop.closeRect } : null,
+        spoilsTake: this.spoilsOverlay.visible ? this.spoilsOverlay.takeRect : null,
       }),
       socketByDef: (col: number, row: number, defId: string): boolean => {
         const t = this.towerAt(col, row);
@@ -727,6 +732,9 @@ export class GameScene extends Phaser.Scene {
       },
       guaranteeRarity: (rarity: "off" | EnemyRarity = "rare") => {
         this.forceRarity = rarity;
+      },
+      setTimeScale: (scale: number) => {
+        this.timeScale = Number.isFinite(scale) && scale > 0 ? Math.min(12, scale) : 1;
       },
       spawnModified: (rarity: EnemyRarity = "rare") => {
         this.spawnEnemy("wretch", rarity);
