@@ -10,23 +10,6 @@ export const GAME_HEIGHT = MAP_ROWS * TILE_SIZE + HUD_HEIGHT;
 export const STARTING_GOLD = 100;
 export const STARTING_LIVES = 20;
 
-/**
- * Axis-aligned waypoint cells. Enemies walk cell-center to cell-center.
- * The path is rasterized into blocked tiles in `pathTiles`.
- */
-export const PATH_WAYPOINTS: readonly GridPos[] = [
-  { col: 0, row: 6 },
-  { col: 5, row: 6 },
-  { col: 5, row: 11 },
-  { col: 10, row: 11 },
-  { col: 10, row: 2 },
-  { col: 16, row: 2 },
-  { col: 16, row: 8 },
-  { col: 19, row: 8 },
-];
-
-export const pathTiles: ReadonlySet<string> = buildPathTiles(PATH_WAYPOINTS);
-
 export function tileKey(col: number, row: number): string {
   return `${col},${row}`;
 }
@@ -35,15 +18,16 @@ export function isInBounds(col: number, row: number): boolean {
   return col >= 0 && row >= 0 && col < MAP_COLS && row < MAP_ROWS;
 }
 
-export function isPathTile(col: number, row: number): boolean {
-  return pathTiles.has(tileKey(col, row));
+export function isPathTile(col: number, row: number, tiles: ReadonlySet<string>): boolean {
+  return tiles.has(tileKey(col, row));
 }
 
-export function isBuildableTile(col: number, row: number): boolean {
-  return isInBounds(col, row) && !isPathTile(col, row);
+export function isBuildableTile(col: number, row: number, tiles: ReadonlySet<string>): boolean {
+  return isInBounds(col, row) && !isPathTile(col, row, tiles);
 }
 
-function buildPathTiles(waypoints: readonly GridPos[]): Set<string> {
+/** Rasterize axis-aligned waypoint cells into a blocked-tile set. */
+export function buildPathTiles(waypoints: readonly GridPos[]): Set<string> {
   const tiles = new Set<string>();
   for (let i = 0; i < waypoints.length - 1; i++) {
     const a = waypoints[i];
@@ -66,6 +50,44 @@ function buildPathTiles(waypoints: readonly GridPos[]): Set<string> {
   return tiles;
 }
 
+export function mergePathTiles(paths: readonly (readonly GridPos[])[]): Set<string> {
+  const tiles = new Set<string>();
+  for (const path of paths) {
+    for (const key of buildPathTiles(path)) tiles.add(key);
+  }
+  return tiles;
+}
+
 export function cellCenter(col: number, row: number): { x: number; y: number } {
   return { x: (col + 0.5) * TILE_SIZE, y: (row + 0.5) * TILE_SIZE };
+}
+
+const NEIGHBORS: readonly [number, number][] = [
+  [1, 0],
+  [-1, 0],
+  [0, 1],
+  [0, -1],
+];
+
+/** First free stone cell beside the path, used by playtests and the opening hint. */
+export function firstBuildableNearPath(
+  tiles: ReadonlySet<string>,
+  occupied: ReadonlySet<string> = new Set(),
+): GridPos {
+  for (const key of tiles) {
+    const parts = key.split(",");
+    const c = Number(parts[0]);
+    const r = Number(parts[1]);
+    for (const [dc, dr] of NEIGHBORS) {
+      const col = c + dc;
+      const row = r + dr;
+      if (isBuildableTile(col, row, tiles) && !occupied.has(tileKey(col, row))) return { col, row };
+    }
+  }
+  for (let row = 0; row < MAP_ROWS; row++) {
+    for (let col = 0; col < MAP_COLS; col++) {
+      if (isBuildableTile(col, row, tiles) && !occupied.has(tileKey(col, row))) return { col, row };
+    }
+  }
+  return { col: 1, row: 1 };
 }

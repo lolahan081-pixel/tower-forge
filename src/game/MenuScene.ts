@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { ATLAS_START_ID, getAtlasNode } from "../data/atlas";
 import { GAME_HEIGHT, GAME_WIDTH } from "../data/map";
 import { getProfile, markHasStarted, markUnlockSeen, persistProfile, resetProfile } from "../data/profile";
 import { pendingUnlocks } from "../data/unlocks";
@@ -6,8 +7,9 @@ import { Palette } from "../palette";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { HelpOverlay } from "./HelpOverlay";
 import { generateTextures } from "./textures";
+import { UiButton } from "./UiButton";
 import { UnlockPopup } from "./UnlockPopup";
-import { containsRect, FONT_BTN, FONT_TITLE, type UiRect } from "./ui";
+import { FONT_TITLE, prepareSceneInput, startScene } from "./ui";
 
 type Ember = { dot: Phaser.GameObjects.Arc; vy: number; life: number; max: number; x: number };
 
@@ -17,11 +19,10 @@ const MENU_BTN_H = 96;
 const EMBER_COUNT = 18;
 
 export class MenuScene extends Phaser.Scene {
-  private startRect!: UiRect;
-  private bastionRect!: UiRect;
-  private howRect!: UiRect;
-  private settingsRect!: UiRect;
-  private startLabel!: Phaser.GameObjects.Text;
+  private startBtn!: UiButton;
+  private bastionBtn!: UiButton;
+  private howBtn!: UiButton;
+  private settingsBtn!: UiButton;
   private help!: HelpOverlay;
   private confirm!: ConfirmDialog;
   private unlocks!: UnlockPopup;
@@ -33,6 +34,7 @@ export class MenuScene extends Phaser.Scene {
 
   create(): void {
     generateTextures(this);
+    prepareSceneInput(this);
     this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, Palette.ground, 1);
     const grid = this.add.graphics();
     grid.fillStyle(Palette.groundAlt, 1);
@@ -43,8 +45,12 @@ export class MenuScene extends Phaser.Scene {
       }
     }
 
+    this.embers = [];
     this.drawGate();
     this.spawnEmbers();
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.embers = [];
+    });
 
     const cx = GAME_WIDTH / 2;
     this.add
@@ -56,27 +62,61 @@ export class MenuScene extends Phaser.Scene {
 
     const firstY = 280;
     const gap = 16;
-    this.startRect = { x: cx - BTN_W / 2, y: firstY, w: BTN_W, h: MENU_BTN_H };
-    this.bastionRect = { x: cx - BTN_W / 2, y: firstY + MENU_BTN_H + gap, w: BTN_W, h: MENU_BTN_H };
-    this.howRect = { x: cx - BTN_W / 2, y: firstY + 2 * (MENU_BTN_H + gap), w: BTN_W, h: MENU_BTN_H };
-    this.settingsRect = { x: cx - BTN_W / 2, y: firstY + 3 * (MENU_BTN_H + gap), w: BTN_W, h: MENU_BTN_H };
+    const x = cx - BTN_W / 2;
+    this.startBtn = new UiButton(this, {
+      x,
+      y: firstY,
+      w: BTN_W,
+      h: MENU_BTN_H,
+      label: this.startLabelText(),
+      style: "emph",
+      onClick: () => this.onStart(),
+    });
+    this.bastionBtn = new UiButton(this, {
+      x,
+      y: firstY + MENU_BTN_H + gap,
+      w: BTN_W,
+      h: MENU_BTN_H,
+      label: "BASTION",
+      onClick: () => this.goBastion(),
+    });
+    this.howBtn = new UiButton(this, {
+      x,
+      y: firstY + 2 * (MENU_BTN_H + gap),
+      w: BTN_W,
+      h: MENU_BTN_H,
+      label: "HOW TO PLAY",
+      onClick: () => {
+        this.setMenuLive(false);
+        this.help.show();
+      },
+    });
+    this.settingsBtn = new UiButton(this, {
+      x,
+      y: firstY + 3 * (MENU_BTN_H + gap),
+      w: BTN_W,
+      h: MENU_BTN_H,
+      label: "SETTINGS",
+      onClick: () => {
+        this.setMenuLive(false);
+        this.confirm.show(
+          "Reset progress?",
+          "This erases your stash, loadout, Lattice, Atlas, and Depth progress. This cannot be undone.",
+          () => {
+            resetProfile();
+            this.startBtn.setLabel(this.startLabelText());
+            this.setMenuLive(true);
+          },
+          () => this.setMenuLive(true),
+        );
+      },
+    });
 
-    this.startLabel = this.makeButton(this.startRect, this.startLabelText(), true);
-    this.makeButton(this.bastionRect, "BASTION", false);
-    this.makeButton(this.howRect, "HOW TO PLAY", false);
-    this.makeButton(this.settingsRect, "SETTINGS", false);
-
-    this.help = new HelpOverlay(this, () => undefined, "menu");
-    this.help.hide();
+    this.help = new HelpOverlay(this, () => this.setMenuLive(true), "menu");
     this.confirm = new ConfirmDialog(this);
     this.unlocks = new UnlockPopup(this, (id) => {
       markUnlockSeen(id);
       this.maybeShowUnlock();
-    });
-
-    this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
-      if (pointer.rightButtonDown()) return;
-      this.handleTap(pointer.worldX, pointer.worldY);
     });
 
     this.exposeDebug();
@@ -89,12 +129,37 @@ export class MenuScene extends Phaser.Scene {
       const e = this.embers[i];
       if (!e) continue;
       e.life += dt;
+      if (!e.dot.active) continue;
       e.dot.y -= e.vy * dt;
       e.dot.x = e.x + Math.sin(e.life * 2.1) * 10;
-      const t = e.life / e.max;
-      e.dot.setAlpha(t < 0.2 ? t / 0.2 : Math.max(0, 1 - (t - 0.2) / 0.8));
+      const fade = e.life / e.max;
+      e.dot.setAlpha(fade < 0.2 ? fade / 0.2 : Math.max(0, 1 - (fade - 0.2) / 0.8));
       if (e.life >= e.max) this.resetEmber(e);
     }
+  }
+
+  private setMenuLive(live: boolean): void {
+    this.startBtn.setEnabled(live);
+    this.bastionBtn.setEnabled(live);
+    this.howBtn.setEnabled(live);
+    this.settingsBtn.setEnabled(live);
+  }
+
+  private onStart(): void {
+    markHasStarted();
+    persistProfile();
+    if (getProfile().highestDepthCleared <= 0 && !getProfile().seenBattleHint) {
+      const node = getAtlasNode(ATLAS_START_ID);
+      startScene(this, "game", { depth: node.depth, layoutId: node.layoutId, atlasNodeId: node.id });
+    } else {
+      startScene(this, "bastion");
+    }
+  }
+
+  private goBastion(): void {
+    markHasStarted();
+    persistProfile();
+    startScene(this, "bastion");
   }
 
   private drawGate(): void {
@@ -137,75 +202,20 @@ export class MenuScene extends Phaser.Scene {
     e.dot.setAlpha(0);
   }
 
-  private makeButton(rect: UiRect, label: string, emph: boolean): Phaser.GameObjects.Text {
-    const box = this.add
-      .rectangle(rect.x + rect.w / 2, rect.y + rect.h / 2, rect.w, rect.h, emph ? 0x2a2014 : 0x1a161c, 1)
-      .setStrokeStyle(2, emph ? Palette.gold : Palette.stoneLight)
-      .setDepth(4)
-      .setInteractive({ useHandCursor: true });
-    const text = this.add
-      .text(rect.x + rect.w / 2, rect.y + rect.h / 2, label, { font: FONT_BTN, color: emph ? "#e8c547" : "#e8e0d4" })
-      .setOrigin(0.5)
-      .setDepth(5);
-    box.on("pointerover", () => box.setStrokeStyle(3, Palette.gold));
-    box.on("pointerout", () => box.setStrokeStyle(2, emph ? Palette.gold : Palette.stoneLight));
-    return text;
-  }
-
   private startLabelText(): string {
     return getProfile().hasStarted ? "CONTINUE" : "START";
-  }
-
-  private handleTap(x: number, y: number): void {
-    if (this.confirm.visible) {
-      this.confirm.handleTap(x, y);
-      return;
-    }
-    if (this.unlocks.visible) {
-      this.unlocks.handleTap(x, y);
-      return;
-    }
-    if (this.help.visible) {
-      this.help.handleTap(x, y);
-      return;
-    }
-    if (containsRect(this.startRect, x, y)) {
-      markHasStarted();
-      persistProfile();
-      if (getProfile().highestDepthCleared <= 0 && !getProfile().seenBattleHint) {
-        this.scene.start("game", { depth: 1 });
-      } else {
-        this.scene.start("bastion");
-      }
-      return;
-    }
-    if (containsRect(this.bastionRect, x, y)) {
-      markHasStarted();
-      persistProfile();
-      this.scene.start("bastion");
-      return;
-    }
-    if (containsRect(this.howRect, x, y)) {
-      this.help.show();
-      return;
-    }
-    if (containsRect(this.settingsRect, x, y)) {
-      this.confirm.show(
-        "Reset progress?",
-        "This erases your stash, loadout, Lattice, and Depth progress. This cannot be undone.",
-        () => {
-          resetProfile();
-          this.startLabel.setText(this.startLabelText());
-        },
-      );
-    }
   }
 
   private maybeShowUnlock(): void {
     const profile = getProfile();
     const pending = pendingUnlocks(profile.highestDepthCleared, profile.seenUnlocks);
     const next = pending[0];
-    if (next) this.unlocks.show(next);
+    if (next) {
+      this.setMenuLive(false);
+      this.unlocks.show(next);
+    } else {
+      this.setMenuLive(true);
+    }
   }
 
   private exposeDebug(): void {
@@ -231,10 +241,10 @@ export class MenuScene extends Phaser.Scene {
         towers: {},
         returnToBastion: null,
         panel: null,
-        menuStart: this.startRect,
-        menuBastion: this.bastionRect,
-        menuHowToPlay: this.howRect,
-        menuSettings: this.settingsRect,
+        menuStart: this.startBtn.rect,
+        menuBastion: this.bastionBtn.rect,
+        menuHowToPlay: this.howBtn.rect,
+        menuSettings: this.settingsBtn.rect,
         settingsCancel: this.confirm.visible ? this.confirm.cancelRect : null,
         settingsConfirm: this.confirm.visible ? this.confirm.confirmRect : null,
         unlockOk: this.unlocks.visible ? this.unlocks.okRect : null,
@@ -244,7 +254,7 @@ export class MenuScene extends Phaser.Scene {
       forceOutcome: () => undefined,
       resetProfile: () => {
         resetProfile();
-        this.startLabel.setText(this.startLabelText());
+        this.startBtn.setLabel(this.startLabelText());
       },
     };
   }

@@ -13,6 +13,7 @@ import {
   unsocketRelic,
   unsocketRune,
 } from "../data/profile";
+import { getAtlasNode, isAtlasNodeId } from "../data/atlas";
 import { featureUnlockDepth, isFeatureUnlocked, pendingUnlocks, type FeatureId } from "../data/unlocks";
 import { makeRelic, relicDisplayName, relicRarityLabel, type RelicRarity } from "../data/relics";
 import { isRuneId, RUNES } from "../data/runes";
@@ -22,15 +23,16 @@ import { TOWERS, TOWER_IDS, type TowerId } from "../data/towers";
 import { Palette } from "../palette";
 import type { HubSnapshot, UiRects } from "../debug";
 import { latticeForTags, tryAllocate } from "../data/lattice";
-import { DepthSelect } from "./DepthSelect";
+import { AtlasPanel } from "./AtlasPanel";
 import { ForgePanel } from "./ForgePanel";
 import { HelpOverlay } from "./HelpOverlay";
 import { UnlockPopup } from "./UnlockPopup";
+import { UiButton } from "./UiButton";
 import { LatticePanel } from "./LatticePanel";
 import { StashPanel } from "./StashPanel";
 import { gemColor, gemName, itemColor } from "./gems";
 import { generateTextures } from "./textures";
-import { BTN_H, containsRect, FONT_BODY, FONT_BTN, FONT_BTN_SM, FONT_HUD, FONT_TITLE, type UiRect } from "./ui";
+import { BTN_H, containsRect, FONT_BODY, FONT_BTN, FONT_BTN_SM, FONT_HUD, FONT_TITLE, pointerWorld, prepareSceneInput, startScene, type UiRect } from "./ui";
 
 type Tab = "loadout" | "stash" | "forge" | "lattice";
 
@@ -50,9 +52,15 @@ export class BastionScene extends Phaser.Scene {
   private lattice!: LatticePanel;
   private forge!: ForgePanel;
   private stash!: StashPanel;
-  private depthSelect!: DepthSelect;
+  private atlas!: AtlasPanel;
   private unlocks!: UnlockPopup;
   private menuRect!: UiRect;
+  private menuBtn!: UiButton;
+  private enterBtn!: UiButton;
+  private tabLoadoutBtn!: UiButton;
+  private tabStashBtn!: UiButton;
+  private tabForgeBtn!: UiButton;
+  private tabLatticeBtn!: UiButton;
   private loadoutLockHint!: Phaser.GameObjects.Text;
   private runeHeading!: Phaser.GameObjects.Text;
   private relicHeading!: Phaser.GameObjects.Text;
@@ -91,6 +99,7 @@ export class BastionScene extends Phaser.Scene {
 
   create(): void {
     generateTextures(this);
+    prepareSceneInput(this);
     getProfile();
 
     this.tab = "loadout";
@@ -115,12 +124,30 @@ export class BastionScene extends Phaser.Scene {
     const enterX = GAME_WIDTH - 24 - enterW;
     const enterY = 16;
     this.enterRect = { x: enterX, y: enterY, w: enterW, h: BTN_H };
-    this.makeButton(enterX, enterY, enterW, BTN_H, "ENTER BREACH", true);
+    this.enterBtn = new UiButton(this, {
+      x: enterX,
+      y: enterY,
+      w: enterW,
+      h: BTN_H,
+      label: "ENTER BREACH",
+      style: "emph",
+      onClick: () => this.atlas.show(),
+    });
 
     const menuW = 160;
     const menuX = enterX - 12 - menuW;
     this.menuRect = { x: menuX, y: enterY, w: menuW, h: BTN_H };
-    this.makeButton(menuX, enterY, menuW, BTN_H, "MENU", false);
+    this.menuBtn = new UiButton(this, {
+      x: menuX,
+      y: enterY,
+      w: menuW,
+      h: BTN_H,
+      label: "MENU",
+      onClick: () => {
+        persistProfile();
+        startScene(this, "menu");
+      },
+    });
 
     const tabY = 16 + BTN_H + 16;
     const tabW = 168;
@@ -128,10 +155,10 @@ export class BastionScene extends Phaser.Scene {
     this.tabStashRect = { x: 24 + tabW + 8, y: tabY, w: tabW, h: BTN_H };
     this.tabForgeRect = { x: 24 + 2 * (tabW + 8), y: tabY, w: tabW, h: BTN_H };
     this.tabLatticeRect = { x: 24 + 3 * (tabW + 8), y: tabY, w: tabW, h: BTN_H };
-    this.makeButton(this.tabLoadoutRect.x, tabY, tabW, BTN_H, "LOADOUT", false);
-    this.makeButton(this.tabStashRect.x, tabY, tabW, BTN_H, "STASH", false);
-    this.makeButton(this.tabForgeRect.x, tabY, tabW, BTN_H, "FORGE", false);
-    this.makeButton(this.tabLatticeRect.x, tabY, tabW, BTN_H, "LATTICE", false);
+    this.tabLoadoutBtn = new UiButton(this, { x: this.tabLoadoutRect.x, y: tabY, w: tabW, h: BTN_H, label: "LOADOUT", onClick: () => { this.tab = "loadout"; this.refresh(); } });
+    this.tabStashBtn = new UiButton(this, { x: this.tabStashRect.x, y: tabY, w: tabW, h: BTN_H, label: "STASH", onClick: () => { if (this.featureOpen("stash")) this.tab = "stash"; this.refresh(); } });
+    this.tabForgeBtn = new UiButton(this, { x: this.tabForgeRect.x, y: tabY, w: tabW, h: BTN_H, label: "FORGE", onClick: () => { if (this.featureOpen("forge")) this.tab = "forge"; this.refresh(); } });
+    this.tabLatticeBtn = new UiButton(this, { x: this.tabLatticeRect.x, y: tabY, w: tabW, h: BTN_H, label: "LATTICE", onClick: () => { if (this.featureOpen("lattice")) this.tab = "lattice"; this.refresh(); } });
     const mark = (rect: { x: number; y: number; w: number; h: number }, vis: boolean) =>
       this.add.rectangle(rect.x + tabW / 2, tabY + BTN_H / 2, tabW, BTN_H).setStrokeStyle(3, Palette.gold).setFillStyle(0, 0).setDepth(6).setVisible(vis);
     this.tabMarks = {
@@ -150,9 +177,10 @@ export class BastionScene extends Phaser.Scene {
     this.stash = new StashPanel(this);
     this.forge = new ForgePanel(this);
     this.lattice = new LatticePanel(this);
-    this.depthSelect = new DepthSelect(this, (depth) => {
+    this.atlas = new AtlasPanel(this, (nodeId) => {
       persistProfile();
-      this.scene.start("game", { depth });
+      const node = getAtlasNode(nodeId);
+      startScene(this, "game", { depth: node.depth, layoutId: node.layoutId, atlasNodeId: node.id });
     });
 
     this.help = new HelpOverlay(this, () => undefined, "bastion");
@@ -166,32 +194,25 @@ export class BastionScene extends Phaser.Scene {
 
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
       if (pointer.rightButtonDown()) return;
-      if (this.tab === "lattice" && this.lattice.handleDown(pointer.worldX, pointer.worldY)) return;
-      this.handleTap(pointer.worldX, pointer.worldY);
+      const pt = pointerWorld(this, pointer);
+      if (this.atlas.visible) {
+        this.atlas.handleTap(pt.x, pt.y);
+        return;
+      }
+      if (this.tab === "lattice" && this.lattice.handleDown(pt.x, pt.y)) return;
+      this.handleTap(pt.x, pt.y);
     });
     this.input.on("pointermove", (pointer: Phaser.Input.Pointer) => {
-      if (this.tab === "lattice") this.lattice.handleMove(pointer.worldX, pointer.worldY);
+      const pt = pointerWorld(this, pointer);
+      if (this.tab === "lattice") this.lattice.handleMove(pt.x, pt.y);
     });
     this.input.on("pointerup", (pointer: Phaser.Input.Pointer) => {
-      if (this.tab === "lattice") this.lattice.handleUp(pointer.worldX, pointer.worldY);
+      const pt = pointerWorld(this, pointer);
+      if (this.tab === "lattice") this.lattice.handleUp(pt.x, pt.y);
     });
 
     this.refresh();
     this.exposeDebug();
-  }
-
-  private makeButton(x: number, y: number, w: number, h: number, label: string, emph: boolean): void {
-    const box = this.add
-      .rectangle(x + w / 2, y + h / 2, w, h, emph ? 0x2a2014 : 0x1a161c, 1)
-      .setStrokeStyle(2, emph ? Palette.gold : Palette.stoneLight)
-      .setDepth(4)
-      .setInteractive({ useHandCursor: true });
-    this.add
-      .text(x + w / 2, y + h / 2, label, { font: FONT_BTN, color: emph ? "#e8c547" : "#e8e0d4" })
-      .setOrigin(0.5)
-      .setDepth(5);
-    box.on("pointerover", () => box.setStrokeStyle(3, Palette.gold));
-    box.on("pointerout", () => box.setStrokeStyle(2, emph ? Palette.gold : Palette.stoneLight));
   }
 
   private makeTabLock(rect: UiRect): { icon: Phaser.GameObjects.Image; caption: Phaser.GameObjects.Text } {
@@ -208,10 +229,24 @@ export class BastionScene extends Phaser.Scene {
     return isFeatureUnlocked(id, getProfile().highestDepthCleared);
   }
 
+  private setHubLive(live: boolean): void {
+    this.menuBtn.setEnabled(live);
+    this.enterBtn.setEnabled(live);
+    this.tabLoadoutBtn.setEnabled(live);
+    this.tabStashBtn.setEnabled(live);
+    this.tabForgeBtn.setEnabled(live);
+    this.tabLatticeBtn.setEnabled(live);
+  }
+
   private maybeShowUnlock(): void {
     const profile = getProfile();
     const next = pendingUnlocks(profile.highestDepthCleared, profile.seenUnlocks)[0];
-    if (next) this.unlocks.show(next);
+    if (next) {
+      this.setHubLive(false);
+      this.unlocks.show(next);
+    } else {
+      this.setHubLive(true);
+    }
   }
 
   private syncTabLocks(): void {
@@ -403,37 +438,8 @@ export class BastionScene extends Phaser.Scene {
       this.unlocks.handleTap(x, y);
       return;
     }
-    if (this.depthSelect.visible) {
-      this.depthSelect.handleTap(x, y);
-      return;
-    }
-    if (containsRect(this.menuRect, x, y)) {
-      persistProfile();
-      this.scene.start("menu");
-      return;
-    }
-    if (containsRect(this.enterRect, x, y)) {
-      this.depthSelect.show();
-      return;
-    }
-    if (containsRect(this.tabLoadoutRect, x, y)) {
-      this.tab = "loadout";
-      this.refresh();
-      return;
-    }
-    if (containsRect(this.tabStashRect, x, y)) {
-      if (this.featureOpen("stash")) this.tab = "stash";
-      this.refresh();
-      return;
-    }
-    if (containsRect(this.tabForgeRect, x, y)) {
-      if (this.featureOpen("forge")) this.tab = "forge";
-      this.refresh();
-      return;
-    }
-    if (containsRect(this.tabLatticeRect, x, y)) {
-      if (this.featureOpen("lattice")) this.tab = "lattice";
-      this.refresh();
+    if (this.atlas.visible) {
+      this.atlas.handleTap(x, y);
       return;
     }
     if (this.tab === "forge") {
@@ -808,8 +814,13 @@ export class BastionScene extends Phaser.Scene {
       tabStash: this.tabStashRect,
       tabForge: this.tabForgeRect,
       tabLattice: this.tabLatticeRect,
-      depthSelect: this.depthSelect.visible
-        ? { depths: this.depthSelect.depthRects, enter: this.depthSelect.enterRect, close: this.depthSelect.closeRect }
+      atlas: this.atlas.visible
+        ? {
+            nodes: this.atlas.nodeRects,
+            enter: this.atlas.enterRect,
+            close: this.atlas.closeRect,
+            selected: this.atlas.selectedId,
+          }
         : null,
       latticeNodes: this.lattice.nodeRects(),
       latticeView: this.lattice.viewRect,
@@ -878,7 +889,16 @@ export class BastionScene extends Phaser.Scene {
       setHighestDepthCleared: (depth: number) => {
         setHighestDepthCleared(depth);
         this.refresh();
+        if (this.atlas.visible) this.atlas.show();
         this.maybeShowUnlock();
+      },
+      openAtlas: () => this.atlas.show(),
+      enterAtlasNode: (id: string) => {
+        if (!isAtlasNodeId(id)) return false;
+        const node = getAtlasNode(id);
+        persistProfile();
+        startScene(this, "game", { depth: node.depth, layoutId: node.layoutId, atlasNodeId: node.id });
+        return true;
       },
       clearSeenUnlocks: () => {
         getProfile().seenUnlocks = [];

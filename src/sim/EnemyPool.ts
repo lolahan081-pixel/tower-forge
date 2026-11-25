@@ -7,7 +7,7 @@ import {
   type EnemyRarity,
 } from "../data/enemyMods";
 import { Palette } from "../palette";
-import { PATH, type PathSample } from "./path";
+import { type PathRoute, type PathSample } from "./path";
 
 export class Enemy {
   alive = false;
@@ -19,6 +19,7 @@ export class Enemy {
   x = 0;
   y = 0;
   dist = 0;
+  path: PathRoute | null = null;
   progress = 0;
   radius = 0;
   rarity: EnemyRarity = "normal";
@@ -59,6 +60,7 @@ export class Enemy {
       rarity?: EnemyRarity;
       mods?: readonly EnemyModId[];
       startDist?: number;
+      path: PathRoute;
     },
   ): void {
     this.alive = true;
@@ -68,6 +70,7 @@ export class Enemy {
     this.speedMult = opts?.speedMult ?? 1;
     this.goldMult = opts?.goldMult ?? 1;
     this.dist = opts?.startDist ?? 0;
+    this.path = opts?.path ?? null;
     this.progress = 0;
     this.radius = def.radius;
     this.rarity = opts?.rarity ?? "normal";
@@ -100,7 +103,7 @@ export class Enemy {
     else if (this.rarity === "unique") this.sprite.setTint(0xffe08a);
     this.hpBg.setVisible(true);
     this.hpFill.setVisible(true);
-    PATH.sample(this.dist, scratchSample);
+    this.path?.sample(this.dist, scratchSample);
     this.applySample(scratchSample);
     this.syncBars();
     this.syncOutline();
@@ -108,7 +111,7 @@ export class Enemy {
 
   setDist(dist: number): void {
     this.dist = Math.max(0, dist);
-    PATH.sample(this.dist, scratchSample);
+    this.path?.sample(this.dist, scratchSample);
     this.applySample(scratchSample);
     this.syncBars();
     this.syncOutline();
@@ -116,12 +119,12 @@ export class Enemy {
 
   advance(dtSec: number): boolean {
     const def = this.def;
-    if (!def || !this.alive) return false;
+    if (!def || !this.alive || !this.path) return false;
     this.dist += def.speed * this.speedMult * this.auraSpeed * dtSec;
     if (this.regenPerSec > 0 && this.hp > 0 && this.hp < this.maxHp) {
       this.hp = Math.min(this.maxHp, this.hp + this.regenPerSec * this.maxHp * dtSec);
     }
-    PATH.sample(this.dist, scratchSample);
+    this.path?.sample(this.dist, scratchSample);
     this.applySample(scratchSample);
     this.syncBars();
     this.syncOutline();
@@ -152,6 +155,7 @@ export class Enemy {
     this.def = null;
     this.mods.length = 0;
     this.splitOnDeath = false;
+    this.path = null;
     this.sprite.setVisible(false).setActive(false).clearTint();
     this.outline.setVisible(false);
     this.hpBg.setVisible(false);
@@ -262,6 +266,7 @@ export class EnemyPool {
       rarity?: EnemyRarity;
       mods?: readonly EnemyModId[];
       startDist?: number;
+      path: PathRoute;
     },
   ): Enemy {
     const enemy = this.free.pop() ?? new Enemy(this.scene);

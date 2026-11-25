@@ -6,12 +6,13 @@ import { isRelic, type RelicInstance } from "./relics";
 import { RUNE_IDS } from "./runes";
 import { SIGIL_IDS } from "./sigils";
 import { TOWERS, TOWER_IDS, isTowerId, type TowerId } from "./towers";
+import { migrateClearedAtlas } from "./atlas";
 import { migrateSeenUnlocks } from "./unlocks";
 
 export type { RelicInstance };
 
 export const PROFILE_STORAGE_KEY = "tower-forge-profile";
-export const PROFILE_VERSION = 3;
+export const PROFILE_VERSION = 4;
 
 export type TowerLoadout = {
   runes: (GemInstance | null)[];
@@ -34,6 +35,9 @@ export type PlayerProfile = {
   /** Feature ids whose unlock popup has been shown. */
   seenUnlocks: string[];
   seenBattleHint: boolean;
+  seenShopHint: boolean;
+  /** Atlas node ids the player has cleared. Neighbors of these are unlocked. */
+  clearedAtlasNodes: string[];
 };
 
 export function runeSlotCount(towerId: TowerId): number {
@@ -68,6 +72,8 @@ export function createDefaultProfile(): PlayerProfile {
     hasStarted: false,
     seenUnlocks: [],
     seenBattleHint: false,
+    seenShopHint: false,
+    clearedAtlasNodes: [],
   };
 }
 
@@ -139,6 +145,11 @@ export function sanitizeProfile(raw: unknown): PlayerProfile {
     ),
     // Missing flag on an old save means they have already played.
     seenBattleHint: typeof rec.seenBattleHint === "boolean" ? rec.seenBattleHint : rec.seenUnlocks === undefined,
+    seenShopHint: typeof rec.seenShopHint === "boolean" ? rec.seenShopHint : rec.seenUnlocks === undefined,
+    clearedAtlasNodes: migrateClearedAtlas(
+      typeof rec.highestDepthCleared === "number" ? rec.highestDepthCleared : 0,
+      rec.clearedAtlasNodes,
+    ),
   };
 }
 
@@ -317,11 +328,14 @@ export function collectSpoils(items: readonly SpoilsItem[]): void {
   persistProfile();
 }
 
-export function awardBreachClear(depth: number): void {
+export function awardBreachClear(depth: number, atlasNodeId?: string): void {
   const profile = getProfile();
   if (depth > profile.highestDepthCleared) profile.highestDepthCleared = depth;
   profile.accountXp += accountXpForClear(depth);
   profile.unspentPoints += pointsForClear(depth);
+  if (atlasNodeId && !profile.clearedAtlasNodes.includes(atlasNodeId)) {
+    profile.clearedAtlasNodes.push(atlasNodeId);
+  }
   persistProfile();
 }
 
@@ -359,5 +373,18 @@ export function markBattleHintSeen(): void {
 export function setHighestDepthCleared(depth: number): void {
   const profile = getProfile();
   profile.highestDepthCleared = Math.max(0, Math.floor(depth));
+  profile.clearedAtlasNodes = migrateClearedAtlas(profile.highestDepthCleared, undefined);
+  persistProfile();
+}
+
+export function markShopHintSeen(): void {
+  const profile = getProfile();
+  profile.seenShopHint = true;
+  persistProfile();
+}
+
+export function markAtlasNodeCleared(id: string): void {
+  const profile = getProfile();
+  if (!profile.clearedAtlasNodes.includes(id)) profile.clearedAtlasNodes.push(id);
   persistProfile();
 }

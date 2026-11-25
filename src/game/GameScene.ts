@@ -4,18 +4,20 @@ import { makeGem, type GemInstance } from "../data/items";
 import { allowedDropsFor, rollKillDrops, type SpoilsItem } from "../data/drops";
 import { buildBreachWaves, goldScale, hpScale, livesForDepth, speedScale } from "../data/depths";
 import { rarityGoldMult, rollEnemyPack, type EnemyRarity } from "../data/enemyMods";
-import { awardBreachClear, collectSpoils, getProfile, markBattleHintSeen, persistProfile } from "../data/profile";
+import { ATLAS_START_ID, getAtlasNode, isAtlasNodeId } from "../data/atlas";
+import { getMapLayout, isMapLayoutId, type MapLayout } from "../data/maps";
+import { awardBreachClear, collectSpoils, getProfile, markBattleHintSeen, markShopHintSeen, persistProfile, setHighestDepthCleared } from "../data/profile";
 import { isFeatureUnlocked } from "../data/unlocks";
 import { makeRelic, type RelicId, type RelicRarity } from "../data/relics";
 import {
   GAME_HEIGHT,
   GAME_WIDTH,
-  MAP_COLS,
   MAP_ROWS,
   STARTING_GOLD,
   STARTING_LIVES,
   TILE_SIZE,
   cellCenter,
+  firstBuildableNearPath,
   isBuildableTile,
   isInBounds,
 } from "../data/map";
@@ -26,11 +28,12 @@ import { TOWERS, isTowerId, type TowerId } from "../data/towers";
 import { Palette } from "../palette";
 import { collectInRadius, findChainTarget, findNearestToExit } from "../sim/combat";
 import { EnemyPool, tickEnemyAuras, type Enemy } from "../sim/EnemyPool";
-import { PATH } from "../sim/path";
+import { routesForPaths, type PathRoute } from "../sim/path";
 import { BeamPool, NovaPool, ProjectilePool } from "../sim/ProjectilePool";
 import { WaveController } from "../sim/WaveController";
 import type { GameSnapshot, GemSnap } from "../debug";
 import { BattleHint } from "./BattleHint";
+import { MessagePopup } from "./MessagePopup";
 import { HelpOverlay } from "./HelpOverlay";
 import { Hud, pointerToCell } from "./Hud";
 import { rollShopOffers } from "../data/shop";
@@ -38,8 +41,10 @@ import { ShopOverlay } from "./ShopOverlay";
 import { SigilPanel } from "./SigilPanel";
 import { SpoilsOverlay } from "./SpoilsOverlay";
 import { drawBoard } from "./drawMap";
+import { gemName } from "./gems";
 import { generateTextures } from "./textures";
 import type { PlacedTower } from "./towerState";
+import { pointerWorld, prepareSceneInput, startScene } from "./ui";
 
 export type Outcome = "playing" | "won" | "lost";
 
@@ -63,6 +68,11 @@ export class GameScene extends Phaser.Scene {
   private spoilsOverlay!: SpoilsOverlay;
   private spoils: SpoilsItem[] = [];
   private depth = 1;
+  private atlasNodeId = ATLAS_START_ID;
+  private layout: MapLayout = getMapLayout("cinder-approach");
+  private routes: PathRoute[] = routesForPaths(getMapLayout("cinder-approach").paths);
+  private spawnPathIndex = 0;
+  private shopHint!: MessagePopup;
   private dropGuarantee: "off" | "relic" | "rune" | "sigil" | "currency" = "off";
   private forceRarity: "off" | EnemyRarity = "off";
   private shop!: ShopOverlay;
@@ -81,8 +91,15 @@ export class GameScene extends Phaser.Scene {
     super("game");
   }
 
-  init(data?: { depth?: number }): void {
-    this.depth = data?.depth && data.depth > 0 ? data.depth : 1;
+  init(data?: { depth?: number; layoutId?: string; atlasNodeId?: string }): void {
+    const nodeId = data?.atlasNodeId && isAtlasNodeId(data.atlasNodeId) ? data.atlasNodeId : ATLAS_START_ID;
+    const node = getAtlasNode(nodeId);
+    this.atlasNodeId = node.id;
+    this.depth = data?.depth && data.depth > 0 ? data.depth : node.depth;
+    const layoutId = data?.layoutId && isMapLayoutId(data.layoutId) ? data.layoutId : node.layoutId;
+    this.layout = getMapLayout(layoutId);
+    this.routes = routesForPaths(this.layout.paths);
+    this.spawnPathIndex = 0;
   }
 
   create(): void {
@@ -90,7 +107,8 @@ export class GameScene extends Phaser.Scene {
     this.waves.useWaves(buildBreachWaves(this.depth));
     this.lives = livesForDepth(this.depth);
     generateTextures(this);
-    drawBoard(this);
+    prepareSceneInput(this);
+    drawBoard(this, this.layout);
 
     this.enemies = new EnemyPool(this, 64);
     this.projectiles = new ProjectilePool(this, 96);
@@ -156,33 +174,40 @@ export class GameScene extends Phaser.Scene {
     const scaleParam = Number(new URLSearchParams(window.location.search).get("timescale") ?? "1");
     this.timeScale = Number.isFinite(scaleParam) && scaleParam > 0 ? Math.min(12, scaleParam) : 1;
 
+    this.shopHint = new MessagePopup(this, 92);
     this.input.on("pointermove", (pointer: Phaser.Input.Pointer) => {
-      this.updateHover(pointer.worldX, pointer.worldY);
+      const pt = pointerWorld(this, pointer);
+      this.updateHover(pt.x, pt.y);
     });
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
       if (pointer.rightButtonDown()) return;
+      const pt = pointerWorld(this, pointer);
+      if (this.shopHint.visible) {
+        this.shopHint.handleTap(pt.x, pt.y);
+        return;
+      }
       if (this.help.visible) {
-        this.help.handleTap(pointer.worldX, pointer.worldY);
+        this.help.handleTap(pt.x, pt.y);
         return;
       }
       if (this.battleHint.visible) {
-        this.battleHint.handleTap(pointer.worldX, pointer.worldY);
+        this.battleHint.handleTap(pt.x, pt.y);
         return;
       }
       if (this.spoilsOverlay.visible) {
-        this.spoilsOverlay.handleTap(pointer.worldX, pointer.worldY);
+        this.spoilsOverlay.handleTap(pt.x, pt.y);
         return;
       }
       if (this.shop.visible) {
-        this.shop.handleTap(pointer.worldX, pointer.worldY);
+        this.shop.handleTap(pt.x, pt.y);
         return;
       }
       if (this.panel.visible) {
-        this.panel.handleTap(pointer.worldX, pointer.worldY);
+        this.panel.handleTap(pt.x, pt.y);
         return;
       }
-      if (this.hud.isOverHud(pointer.worldY)) return;
-      const cell = pointerToCell(pointer.worldX, pointer.worldY);
+      if (this.hud.isOverMenu(pt.x, pt.y) || this.hud.isOverHud(pt.y)) return;
+      const cell = pointerToCell(pt.x, pt.y);
       const existing = this.towerAt(cell.col, cell.row);
       if (existing) {
         this.lastTower = existing;
@@ -240,14 +265,14 @@ export class GameScene extends Phaser.Scene {
     if (this.spoils.length > 0) collectSpoils(this.spoils);
     this.spoils = [];
     persistProfile();
-    this.scene.start("bastion");
+    startScene(this, "bastion");
   }
 
   private returnToMenu(): void {
     if (this.spoils.length > 0) collectSpoils(this.spoils);
     this.spoils = [];
     persistProfile();
-    this.scene.start("menu");
+    startScene(this, "menu");
   }
 
   private openInscribe(): void {
@@ -279,7 +304,7 @@ export class GameScene extends Phaser.Scene {
       if (this.waves.endIfClear(this.enemies.livingCount)) {
         this.hudDirty = true;
         if (!this.waves.hasMoreWaves) this.setOutcome("won");
-        else this.shop.show(rollShopOffers(Math.random, { runes: isFeatureUnlocked("runes", getProfile().highestDepthCleared) }));
+        else this.openShop();
       }
     } else {
       this.beams.step(dtSec);
@@ -300,7 +325,7 @@ export class GameScene extends Phaser.Scene {
 
   tryBuild(col: number, row: number, towerId: TowerId): boolean {
     if (this.outcome !== "playing") return false;
-    if (!isBuildableTile(col, row)) return false;
+    if (!isBuildableTile(col, row, this.layout.tiles)) return false;
     const key = `${col},${row}`;
     if (this.occupied.has(key)) return false;
     const def = TOWERS[towerId];
@@ -401,6 +426,54 @@ export class GameScene extends Phaser.Scene {
     return undefined;
   }
 
+
+  private nextRoute(): PathRoute {
+    const routes = this.routes;
+    const route = routes[this.spawnPathIndex % routes.length];
+    this.spawnPathIndex += 1;
+    return route ?? routes[0]!;
+  }
+
+  private openShop(): void {
+    const runes = isFeatureUnlocked("runes", getProfile().highestDepthCleared);
+    this.shop.show(rollShopOffers(Math.random, { runes }), this.shopInfo(runes));
+    if (!getProfile().seenShopHint) {
+      this.shopHint.show(
+        "The Ashen Peddler",
+        "This stall appears between waves. Spend gold from kills and waves on Sigils. Bought Sigils go to your bag; swap them onto a frame with the SIGIL button.\n\nRunes join the stall once you have cleared Depth 1.",
+        () => markShopHintSeen(),
+      );
+    }
+  }
+
+  private shopInfo(runesUnlocked: boolean): { owned: string; equipped: string; runesUnlocked: boolean } {
+    const names: string[] = [];
+    const seen = new Set<string>();
+    for (const g of getProfile().sigilInventory) {
+      const n = gemName(g);
+      if (!seen.has(n)) {
+        seen.add(n);
+        names.push(n);
+      }
+    }
+    const eq: string[] = [];
+    const eqSeen = new Set<string>();
+    for (const tower of this.towers) {
+      const gem = tower.sockets[0];
+      if (!gem) continue;
+      const n = gemName(gem);
+      if (!eqSeen.has(n)) {
+        eqSeen.add(n);
+        eq.push(n);
+      }
+    }
+    const cap = (list: string[]): string => {
+      if (list.length <= 4) return list.join(", ");
+      return `${list.slice(0, 4).join(", ")} and ${list.length - 4} more`;
+    };
+    return { owned: cap(names), equipped: cap(eq), runesUnlocked };
+  }
+
   private spawnEnemy(id: EnemyId, forced?: EnemyRarity): void {
     const pack =
       id === "hollow-sovereign"
@@ -408,12 +481,14 @@ export class GameScene extends Phaser.Scene {
         : !isFeatureUnlocked("enemy-mods", getProfile().highestDepthCleared) && this.forceRarity === "off" && !forced
           ? { rarity: "normal" as const, mods: [] }
           : rollEnemyPack(this.depth, forced ?? (this.forceRarity === "off" ? undefined : this.forceRarity));
+    const path = this.nextRoute();
     this.enemies.spawn(ENEMIES[id], {
       hpMult: hpScale(this.depth),
       speedMult: speedScale(this.depth),
       goldMult: goldScale(this.depth) * rarityGoldMult(pack.rarity),
       rarity: pack.rarity,
       mods: pack.mods,
+      path,
     });
   }
 
@@ -556,12 +631,13 @@ export class GameScene extends Phaser.Scene {
     const split = enemy.splitOnDeath && enemy.def && !this.stressMode;
     const splitDef = split ? enemy.def : null;
     const splitDist = enemy.dist;
+    const splitPath = enemy.path;
     const childHpMult = split && enemy.def ? Math.max(1, Math.round(enemy.maxHp * 0.4)) / enemy.def.maxHp : 0;
     const list = this.enemies.active;
     const idx = list.indexOf(enemy);
     if (idx >= 0) this.enemies.releaseAt(idx);
     else enemy.release();
-    if (splitDef) {
+    if (splitDef && splitPath) {
       for (let s = 0; s < 2; s++) {
         const child = this.enemies.spawn(splitDef, {
           hpMult: childHpMult,
@@ -570,6 +646,7 @@ export class GameScene extends Phaser.Scene {
           rarity: "normal",
           mods: [],
           startDist: Math.max(0, splitDist + (s === 0 ? -12 : 12)),
+          path: splitPath,
         });
         child.splitOnDeath = false;
       }
@@ -604,7 +681,7 @@ export class GameScene extends Phaser.Scene {
     this.outcome = outcome;
     this.waves.active = false;
     this.hudDirty = true;
-    if (outcome === "won") awardBreachClear(this.depth);
+    if (outcome === "won") awardBreachClear(this.depth, this.atlasNodeId);
     if (this.spoils.length > 0) this.spoilsOverlay.show(this.spoils);
   }
 
@@ -627,7 +704,7 @@ export class GameScene extends Phaser.Scene {
       this.rangePreview.clear();
       return;
     }
-    const ok = isBuildableTile(col, row);
+    const ok = isBuildableTile(col, row, this.layout.tiles);
     this.hover
       .setPosition(cx, cy)
       .setStrokeStyle(2, ok ? Palette.gold : Palette.invalid)
@@ -674,6 +751,9 @@ export class GameScene extends Phaser.Scene {
       selected: this.selected,
       panelOpen: this.panel.visible,
       helpVisible: this.help.visible,
+      layoutId: this.layout.id,
+      mapName: this.layout.name,
+      atlasNodeId: this.atlasNodeId,
       inventory: getProfile().sigilInventory.map(snapGem),
       towerSockets: this.towers.map((t) => ({
         col: t.col,
@@ -694,7 +774,7 @@ export class GameScene extends Phaser.Scene {
       },
       startWave: (): boolean => this.tryStartWave(),
       getState: (): GameSnapshot => this.getSnapshot(),
-      firstBuildableNearPath: (): { col: number; row: number } => firstBuildableNearPath(this.occupied),
+      firstBuildableNearPath: (): { col: number; row: number } => firstBuildableNearPath(this.layout.tiles, this.occupied),
       stress: (count: number): { spawned: number; fps: number } => this.runStress(count),
       enemyPositions: () => {
         return this.enemies.active.map((e) => ({
@@ -727,6 +807,7 @@ export class GameScene extends Phaser.Scene {
         ...this.hud.rects(),
         panel: this.panel.visible ? this.panel.rects() : null,
         battleHintOk: this.battleHint.visible ? this.battleHint.okRect : null,
+        shopHelpOk: this.shopHint.visible ? this.shopHint.okRect : null,
         shop: this.shop.visible ? { offers: this.shop.offerBuyRects, close: this.shop.closeRect } : null,
         spoilsTake: this.spoilsOverlay.visible ? this.spoilsOverlay.takeRect : null,
       }),
@@ -759,8 +840,7 @@ export class GameScene extends Phaser.Scene {
         this.forceRarity = rarity;
       },
       setHighestDepthCleared: (depth: number) => {
-        getProfile().highestDepthCleared = Math.max(0, Math.floor(depth));
-        persistProfile();
+        setHighestDepthCleared(depth);
       },
       setTimeScale: (scale: number) => {
         this.timeScale = Number.isFinite(scale) && scale > 0 ? Math.min(12, scale) : 1;
@@ -768,7 +848,7 @@ export class GameScene extends Phaser.Scene {
       spawnModified: (rarity: EnemyRarity = "rare") => {
         this.spawnEnemy("wretch", rarity);
         const e = this.enemies.active[this.enemies.active.length - 1];
-        if (e) e.setDist(PATH.totalLen * 0.35);
+        if (e) e.setDist((e.path ?? this.routes[0])!.totalLen * 0.35);
         return e ? { rarity: e.rarity, mods: e.mods.slice(), hp: e.hp } : null;
       },
       shopOffers: () => this.shop.currentOffers,
@@ -783,14 +863,15 @@ export class GameScene extends Phaser.Scene {
     const startCount = this.enemies.active.length;
     for (let i = 0; i < n; i++) {
       const id: EnemyId = (i & 1) === 0 ? "wretch" : "brute";
-      this.enemies.spawn(ENEMIES[id]);
+      this.enemies.spawn(ENEMIES[id], { path: this.nextRoute() });
     }
     const active = this.enemies.active;
     const placed = active.length - startCount;
     for (let i = 0; i < placed; i++) {
       const enemy = active[startCount + i];
       if (!enemy) continue;
-      enemy.dist = (i / Math.max(1, placed)) * PATH.totalLen * 0.92;
+      const total = enemy.path?.totalLen ?? this.routes[0]!.totalLen;
+      enemy.dist = (i / Math.max(1, placed)) * total * 0.92;
       enemy.advance(0);
     }
     return { spawned: placed, fps: this.getSnapshot().fps };
@@ -800,25 +881,3 @@ export class GameScene extends Phaser.Scene {
 function snapGem(g: GemInstance): GemSnap {
   return { uid: g.uid, defId: g.defId, kind: g.kind, level: g.level, xp: g.xp };
 }
-
-function firstBuildableNearPath(occupied: Set<string>): { col: number; row: number } {
-  const candidates: { col: number; row: number }[] = [
-    { col: 3, row: 5 },
-    { col: 3, row: 7 },
-    { col: 2, row: 5 },
-    { col: 4, row: 5 },
-    { col: 5, row: 5 },
-    { col: 10, row: 3 },
-    { col: 16, row: 7 },
-  ];
-  for (const c of candidates) {
-    if (isBuildableTile(c.col, c.row) && !occupied.has(`${c.col},${c.row}`)) return c;
-  }
-  for (let row = 0; row < MAP_ROWS; row++) {
-    for (let col = 0; col < MAP_COLS; col++) {
-      if (isBuildableTile(col, row) && !occupied.has(`${col},${row}`)) return { col, row };
-    }
-  }
-  return { col: 1, row: 1 };
-}
-

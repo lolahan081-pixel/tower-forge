@@ -1,4 +1,4 @@
-import { PATH_WAYPOINTS, TILE_SIZE } from "../data/map";
+import { TILE_SIZE, type GridPos } from "../data/map";
 
 export type PathSample = {
   x: number;
@@ -17,8 +17,8 @@ export class PathRoute {
   readonly cumLen: Float64Array;
   readonly totalLen: number;
 
-  constructor() {
-    const pts = PATH_WAYPOINTS;
+  constructor(waypoints: readonly GridPos[]) {
+    const pts = waypoints;
     this.pointCount = pts.length;
     this.pointsX = new Float64Array(this.pointCount);
     this.pointsY = new Float64Array(this.pointCount);
@@ -85,4 +85,6 @@ export class PathRoute {
   }
 }
 
-export const PATH = new PathRoute();
+export function routesForPaths(paths: readonly (readonly GridPos[])[]): PathRoute[] {
+  return paths.map((path) => new PathRoute(path));
+}
