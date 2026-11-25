@@ -1,10 +1,11 @@
 import Phaser from "phaser";
 import { ENEMIES, type EnemyId } from "../data/enemies";
 import { makeGem, type GemInstance } from "../data/items";
-import { rollKillDrops, type SpoilsItem } from "../data/drops";
+import { allowedDropsFor, rollKillDrops, type SpoilsItem } from "../data/drops";
 import { buildBreachWaves, goldScale, hpScale, livesForDepth, speedScale } from "../data/depths";
 import { rarityGoldMult, rollEnemyPack, type EnemyRarity } from "../data/enemyMods";
-import { awardBreachClear, collectSpoils, getProfile, persistProfile } from "../data/profile";
+import { awardBreachClear, collectSpoils, getProfile, markBattleHintSeen, persistProfile } from "../data/profile";
+import { isFeatureUnlocked } from "../data/unlocks";
 import { makeRelic, type RelicId, type RelicRarity } from "../data/relics";
 import {
   GAME_HEIGHT,
@@ -29,6 +30,7 @@ import { PATH } from "../sim/path";
 import { BeamPool, NovaPool, ProjectilePool } from "../sim/ProjectilePool";
 import { WaveController } from "../sim/WaveController";
 import type { GameSnapshot, GemSnap } from "../debug";
+import { BattleHint } from "./BattleHint";
 import { HelpOverlay } from "./HelpOverlay";
 import { Hud, pointerToCell } from "./Hud";
 import { rollShopOffers } from "../data/shop";
@@ -56,6 +58,7 @@ export class GameScene extends Phaser.Scene {
   private hud!: Hud;
   private panel!: SigilPanel;
   private help!: HelpOverlay;
+  private battleHint!: BattleHint;
   private lastTower: PlacedTower | null = null;
   private spoilsOverlay!: SpoilsOverlay;
   private spoils: SpoilsItem[] = [];
@@ -117,6 +120,9 @@ export class GameScene extends Phaser.Scene {
       () => {
         this.returnToBastion();
       },
+      () => {
+        this.returnToMenu();
+      },
     );
 
     this.help = new HelpOverlay(this, () => {
@@ -159,6 +165,10 @@ export class GameScene extends Phaser.Scene {
         this.help.handleTap(pointer.worldX, pointer.worldY);
         return;
       }
+      if (this.battleHint.visible) {
+        this.battleHint.handleTap(pointer.worldX, pointer.worldY);
+        return;
+      }
       if (this.spoilsOverlay.visible) {
         this.spoilsOverlay.handleTap(pointer.worldX, pointer.worldY);
         return;
@@ -199,8 +209,12 @@ export class GameScene extends Phaser.Scene {
 
     this.hud.refresh(this.hudArgs());
     this.exposeDebugHook();
-    if (this.help.shouldShow()) this.help.show();
-    else this.help.hide();
+    this.help.hide();
+    this.battleHint = new BattleHint(this, () => {
+      markBattleHintSeen();
+      this.hudDirty = true;
+    });
+    if (!getProfile().seenBattleHint) this.battleHint.show();
   }
 
   private resetBattleState(): void {
@@ -227,6 +241,13 @@ export class GameScene extends Phaser.Scene {
     this.spoils = [];
     persistProfile();
     this.scene.start("bastion");
+  }
+
+  private returnToMenu(): void {
+    if (this.spoils.length > 0) collectSpoils(this.spoils);
+    this.spoils = [];
+    persistProfile();
+    this.scene.start("menu");
   }
 
   private openInscribe(): void {
@@ -258,7 +279,7 @@ export class GameScene extends Phaser.Scene {
       if (this.waves.endIfClear(this.enemies.livingCount)) {
         this.hudDirty = true;
         if (!this.waves.hasMoreWaves) this.setOutcome("won");
-        else this.shop.show(rollShopOffers());
+        else this.shop.show(rollShopOffers(Math.random, { runes: isFeatureUnlocked("runes", getProfile().highestDepthCleared) }));
       }
     } else {
       this.beams.step(dtSec);
@@ -384,7 +405,9 @@ export class GameScene extends Phaser.Scene {
     const pack =
       id === "hollow-sovereign"
         ? { rarity: "unique" as const, mods: [] }
-        : rollEnemyPack(this.depth, forced ?? (this.forceRarity === "off" ? undefined : this.forceRarity));
+        : !isFeatureUnlocked("enemy-mods", getProfile().highestDepthCleared) && this.forceRarity === "off" && !forced
+          ? { rarity: "normal" as const, mods: [] }
+          : rollEnemyPack(this.depth, forced ?? (this.forceRarity === "off" ? undefined : this.forceRarity));
     this.enemies.spawn(ENEMIES[id], {
       hpMult: hpScale(this.depth),
       speedMult: speedScale(this.depth),
@@ -562,11 +585,12 @@ export class GameScene extends Phaser.Scene {
     if (this.dropGuarantee === "relic") {
       this.spoils.push({ kind: "relic", item: makeRelic("gate-seal", "magic", Math.max(1, this.depth * 2)) });
     } else if (this.dropGuarantee !== "off") {
-      const forced = rollKillDrops("unique", this.depth);
+      const allowed = allowedDropsFor(getProfile().highestDepthCleared);
+      const forced = rollKillDrops("unique", this.depth, Math.random, allowed);
       const hit = forced.find((d) => d.kind === this.dropGuarantee);
       if (hit) this.spoils.push(hit);
     } else {
-      const drops = rollKillDrops(rarity, this.depth);
+      const drops = rollKillDrops(rarity, this.depth, Math.random, allowedDropsFor(getProfile().highestDepthCleared));
       for (let i = 0; i < drops.length; i++) this.spoils.push(drops[i]!);
     }
     if (tower) {
@@ -702,6 +726,7 @@ export class GameScene extends Phaser.Scene {
         helpDismiss: this.help.dismissRect(),
         ...this.hud.rects(),
         panel: this.panel.visible ? this.panel.rects() : null,
+        battleHintOk: this.battleHint.visible ? this.battleHint.okRect : null,
         shop: this.shop.visible ? { offers: this.shop.offerBuyRects, close: this.shop.closeRect } : null,
         spoilsTake: this.spoilsOverlay.visible ? this.spoilsOverlay.takeRect : null,
       }),
@@ -732,6 +757,10 @@ export class GameScene extends Phaser.Scene {
       },
       guaranteeRarity: (rarity: "off" | EnemyRarity = "rare") => {
         this.forceRarity = rarity;
+      },
+      setHighestDepthCleared: (depth: number) => {
+        getProfile().highestDepthCleared = Math.max(0, Math.floor(depth));
+        persistProfile();
       },
       setTimeScale: (scale: number) => {
         this.timeScale = Number.isFinite(scale) && scale > 0 ? Math.min(12, scale) : 1;

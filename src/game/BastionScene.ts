@@ -3,13 +3,17 @@ import { makeGem } from "../data/items";
 import { GAME_HEIGHT, GAME_WIDTH } from "../data/map";
 import {
   getProfile,
+  markUnlockSeen,
   persistProfile,
+  resetProfile,
   runeSlotCount,
+  setHighestDepthCleared,
   socketRelic,
   socketRune,
   unsocketRelic,
   unsocketRune,
 } from "../data/profile";
+import { featureUnlockDepth, isFeatureUnlocked, pendingUnlocks, type FeatureId } from "../data/unlocks";
 import { makeRelic, relicDisplayName, relicRarityLabel, type RelicRarity } from "../data/relics";
 import { isRuneId, RUNES } from "../data/runes";
 import { SIGILS } from "../data/sigils";
@@ -21,6 +25,7 @@ import { latticeForTags, tryAllocate } from "../data/lattice";
 import { DepthSelect } from "./DepthSelect";
 import { ForgePanel } from "./ForgePanel";
 import { HelpOverlay } from "./HelpOverlay";
+import { UnlockPopup } from "./UnlockPopup";
 import { LatticePanel } from "./LatticePanel";
 import { StashPanel } from "./StashPanel";
 import { gemColor, gemName, itemColor } from "./gems";
@@ -46,6 +51,17 @@ export class BastionScene extends Phaser.Scene {
   private forge!: ForgePanel;
   private stash!: StashPanel;
   private depthSelect!: DepthSelect;
+  private unlocks!: UnlockPopup;
+  private menuRect!: UiRect;
+  private loadoutLockHint!: Phaser.GameObjects.Text;
+  private runeHeading!: Phaser.GameObjects.Text;
+  private relicHeading!: Phaser.GameObjects.Text;
+  private invHeading!: Phaser.GameObjects.Text;
+  private runesBtn!: Phaser.GameObjects.Rectangle;
+  private relicsBtn!: Phaser.GameObjects.Rectangle;
+  private runesBtnLabel!: Phaser.GameObjects.Text;
+  private relicsBtnLabel!: Phaser.GameObjects.Text;
+  private tabLockUi!: Record<Exclude<Tab, "loadout">, { icon: Phaser.GameObjects.Image; caption: Phaser.GameObjects.Text }>;
   private hint!: Phaser.GameObjects.Text;
   private statsText!: Phaser.GameObjects.Text;
   private sigilLabel!: Phaser.GameObjects.Text;
@@ -101,6 +117,11 @@ export class BastionScene extends Phaser.Scene {
     this.enterRect = { x: enterX, y: enterY, w: enterW, h: BTN_H };
     this.makeButton(enterX, enterY, enterW, BTN_H, "ENTER BREACH", true);
 
+    const menuW = 160;
+    const menuX = enterX - 12 - menuW;
+    this.menuRect = { x: menuX, y: enterY, w: menuW, h: BTN_H };
+    this.makeButton(menuX, enterY, menuW, BTN_H, "MENU", false);
+
     const tabY = 16 + BTN_H + 16;
     const tabW = 168;
     this.tabLoadoutRect = { x: 24, y: tabY, w: tabW, h: BTN_H };
@@ -119,6 +140,11 @@ export class BastionScene extends Phaser.Scene {
       forge: mark(this.tabForgeRect, false),
       lattice: mark(this.tabLatticeRect, false),
     };
+    this.tabLockUi = {
+      stash: this.makeTabLock(this.tabStashRect),
+      forge: this.makeTabLock(this.tabForgeRect),
+      lattice: this.makeTabLock(this.tabLatticeRect),
+    };
 
     this.buildLoadout();
     this.stash = new StashPanel(this);
@@ -130,8 +156,13 @@ export class BastionScene extends Phaser.Scene {
     });
 
     this.help = new HelpOverlay(this, () => undefined, "bastion");
-    if (this.help.shouldShow()) this.help.show();
-    else this.help.hide();
+    this.help.hide();
+    this.unlocks = new UnlockPopup(this, (id) => {
+      markUnlockSeen(id);
+      this.refresh();
+      this.maybeShowUnlock();
+    });
+    this.maybeShowUnlock();
 
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
       if (pointer.rightButtonDown()) return;
@@ -161,6 +192,36 @@ export class BastionScene extends Phaser.Scene {
       .setDepth(5);
     box.on("pointerover", () => box.setStrokeStyle(3, Palette.gold));
     box.on("pointerout", () => box.setStrokeStyle(2, emph ? Palette.gold : Palette.stoneLight));
+  }
+
+  private makeTabLock(rect: UiRect): { icon: Phaser.GameObjects.Image; caption: Phaser.GameObjects.Text } {
+    const icon = this.add.image(rect.x + 22, rect.y + 28, "ui-lock").setDepth(7).setVisible(false);
+    const caption = this.add
+      .text(rect.x + rect.w / 2, rect.y + rect.h - 18, "", { font: FONT_BTN_SM, color: "#8a8490" })
+      .setOrigin(0.5, 0.5)
+      .setDepth(7)
+      .setVisible(false);
+    return { icon, caption };
+  }
+
+  private featureOpen(id: FeatureId): boolean {
+    return isFeatureUnlocked(id, getProfile().highestDepthCleared);
+  }
+
+  private maybeShowUnlock(): void {
+    const profile = getProfile();
+    const next = pendingUnlocks(profile.highestDepthCleared, profile.seenUnlocks)[0];
+    if (next) this.unlocks.show(next);
+  }
+
+  private syncTabLocks(): void {
+    const map: Record<Exclude<Tab, "loadout">, FeatureId> = { stash: "stash", forge: "forge", lattice: "lattice" };
+    for (const tab of ["stash", "forge", "lattice"] as const) {
+      const open = this.featureOpen(map[tab]);
+      const ui = this.tabLockUi[tab];
+      ui.icon.setVisible(!open);
+      ui.caption.setVisible(!open).setText(open ? "" : `Clear Depth ${featureUnlockDepth(map[tab])}`);
+    }
   }
 
   private buildLoadout(): void {
@@ -199,20 +260,20 @@ export class BastionScene extends Phaser.Scene {
 
     typeY += 12;
     this.invRunesRect = { x: 24, y: typeY, w: typeW, h: BTN_H };
-    const runesBtn = this.add
+    this.runesBtn = this.add
       .rectangle(24 + typeW / 2, typeY + BTN_H / 2, typeW, BTN_H, 0x1a161c, 1)
       .setStrokeStyle(2, Palette.goldDim)
       .setInteractive({ useHandCursor: true });
-    this.add.text(24 + typeW / 2, typeY + BTN_H / 2, "RUNES", { font: FONT_BTN, color: "#e8e0d4" }).setOrigin(0.5);
-    children.push(runesBtn);
+    this.runesBtnLabel = this.add.text(24 + typeW / 2, typeY + BTN_H / 2, "RUNES", { font: FONT_BTN, color: "#e8e0d4" }).setOrigin(0.5);
+    children.push(this.runesBtn, this.runesBtnLabel);
     typeY += BTN_H + 12;
     this.invRelicsRect = { x: 24, y: typeY, w: typeW, h: BTN_H };
-    const relicsBtn = this.add
+    this.relicsBtn = this.add
       .rectangle(24 + typeW / 2, typeY + BTN_H / 2, typeW, BTN_H, 0x1a161c, 1)
       .setStrokeStyle(2, Palette.stoneLight)
       .setInteractive({ useHandCursor: true });
-    this.add.text(24 + typeW / 2, typeY + BTN_H / 2, "RELICS", { font: FONT_BTN, color: "#e8e0d4" }).setOrigin(0.5);
-    children.push(relicsBtn);
+    this.relicsBtnLabel = this.add.text(24 + typeW / 2, typeY + BTN_H / 2, "RELICS", { font: FONT_BTN, color: "#e8e0d4" }).setOrigin(0.5);
+    children.push(this.relicsBtn, this.relicsBtnLabel);
     this.invRunesMark = this.add
       .rectangle(this.invRunesRect.x + typeW / 2, this.invRunesRect.y + BTN_H / 2, typeW, BTN_H)
       .setStrokeStyle(3, Palette.gold)
@@ -242,9 +303,17 @@ export class BastionScene extends Phaser.Scene {
       lineSpacing: 4,
     });
     children.push(this.statsText);
+    this.loadoutLockHint = this.add.text(panelX + 20, top + 96, "", {
+      font: FONT_BODY,
+      color: "#c9a227",
+      wordWrap: { width: panelW - 40 },
+      lineSpacing: 4,
+    });
+    children.push(this.loadoutLockHint);
 
     const runeY = top + 88;
-    children.push(this.add.text(panelX + 20, runeY, "Rune sockets", { font: FONT_BTN_SM, color: "#8a8490" }));
+    this.runeHeading = this.add.text(panelX + 20, runeY, "Rune sockets", { font: FONT_BTN_SM, color: "#8a8490" });
+    children.push(this.runeHeading);
     this.runeViews = [];
     const slotH = BTN_H;
     const runeSlotW = (panelW - 40 - 24) / 3;
@@ -257,7 +326,8 @@ export class BastionScene extends Phaser.Scene {
     }
 
     const relicY = runeY + 24 + slotH + 12;
-    children.push(this.add.text(panelX + 20, relicY, "Relic slots", { font: FONT_BTN_SM, color: "#8a8490" }));
+    this.relicHeading = this.add.text(panelX + 20, relicY, "Relic slots", { font: FONT_BTN_SM, color: "#8a8490" });
+    children.push(this.relicHeading);
     this.relicViews = [];
     const rowInner = panelW - 40;
     const rowGap = 12;
@@ -284,7 +354,8 @@ export class BastionScene extends Phaser.Scene {
     children.push(this.unsocketBtn, this.unsocketLabel);
 
     const invY = unY + BTN_H + 14;
-    children.push(this.add.text(panelX + 20, invY, "Rune inventory", { font: FONT_BTN_SM, color: "#8a8490" }));
+    this.invHeading = this.add.text(panelX + 20, invY, "Rune inventory", { font: FONT_BTN_SM, color: "#8a8490" });
+    children.push(this.invHeading);
     this.hint = this.add.text(panelX + 220, invY, "Tap a rune, then a socket", { font: FONT_BODY, color: "#c9a227" });
     children.push(this.hint);
 
@@ -328,8 +399,17 @@ export class BastionScene extends Phaser.Scene {
       this.help.handleTap(x, y);
       return;
     }
+    if (this.unlocks.visible) {
+      this.unlocks.handleTap(x, y);
+      return;
+    }
     if (this.depthSelect.visible) {
       this.depthSelect.handleTap(x, y);
+      return;
+    }
+    if (containsRect(this.menuRect, x, y)) {
+      persistProfile();
+      this.scene.start("menu");
       return;
     }
     if (containsRect(this.enterRect, x, y)) {
@@ -342,17 +422,17 @@ export class BastionScene extends Phaser.Scene {
       return;
     }
     if (containsRect(this.tabStashRect, x, y)) {
-      this.tab = "stash";
+      if (this.featureOpen("stash")) this.tab = "stash";
       this.refresh();
       return;
     }
     if (containsRect(this.tabForgeRect, x, y)) {
-      this.tab = "forge";
+      if (this.featureOpen("forge")) this.tab = "forge";
       this.refresh();
       return;
     }
     if (containsRect(this.tabLatticeRect, x, y)) {
-      this.tab = "lattice";
+      if (this.featureOpen("lattice")) this.tab = "lattice";
       this.refresh();
       return;
     }
@@ -378,15 +458,19 @@ export class BastionScene extends Phaser.Scene {
     }
 
     if (containsRect(this.invRunesRect, x, y)) {
-      this.invMode = "rune";
-      this.selectedUid = null;
-      this.refresh();
+      if (this.featureOpen("runes")) {
+        this.invMode = "rune";
+        this.selectedUid = null;
+        this.refresh();
+      }
       return;
     }
     if (containsRect(this.invRelicsRect, x, y)) {
-      this.invMode = "relic";
-      this.selectedUid = null;
-      this.refresh();
+      if (this.featureOpen("relics")) {
+        this.invMode = "relic";
+        this.selectedUid = null;
+        this.refresh();
+      }
       return;
     }
 
@@ -487,10 +571,16 @@ export class BastionScene extends Phaser.Scene {
     this.tabMarks?.stash.setVisible(onStash);
     this.tabMarks?.forge.setVisible(onForge);
     this.tabMarks?.lattice.setVisible(onLattice);
+    this.syncTabLocks();
     if (onForge) this.forge.refresh();
     if (onStash) this.stash.refresh();
     if (onLattice) this.lattice.refresh();
     if (!onLoadout) return;
+
+    const runesOn = this.featureOpen("runes");
+    const relicsOn = this.featureOpen("relics");
+    if (!runesOn && this.invMode === "rune") this.invMode = relicsOn ? "relic" : "rune";
+    if (!relicsOn && this.invMode === "relic") this.invMode = "rune";
 
     const def = TOWERS[this.selected];
     const profile = getProfile();
@@ -500,6 +590,31 @@ export class BastionScene extends Phaser.Scene {
 
     this.sigilLabel.setText(`${def.name}  ·  default Sigil  ${SIGILS[def.starterSigil].name}`);
     this.statsText.setText(formatPreview(resolved));
+
+    this.runeHeading.setVisible(runesOn);
+    this.relicHeading.setVisible(relicsOn);
+    this.invHeading.setVisible(runesOn || relicsOn);
+    this.runesBtn.setVisible(runesOn);
+    this.runesBtnLabel.setVisible(runesOn);
+    this.relicsBtn.setVisible(relicsOn);
+    this.relicsBtnLabel.setVisible(relicsOn);
+    this.invRunesMark.setVisible(runesOn && this.invMode === "rune");
+    this.invRelicsMark.setVisible(relicsOn && this.invMode === "relic");
+    this.unsocketBtn.setVisible(runesOn || relicsOn);
+    this.unsocketLabel.setVisible(runesOn || relicsOn);
+    if (!runesOn && !relicsOn) {
+      this.loadoutLockHint
+        .setVisible(true)
+        .setPosition(this.runeHeading.x, this.runeHeading.y)
+        .setText("Clear Depth 1 to unlock Runes. Relics and the Stash open after Depth 2.");
+    } else if (!relicsOn) {
+      this.loadoutLockHint
+        .setVisible(true)
+        .setPosition(this.relicHeading.x, this.relicHeading.y)
+        .setText("Clear Depth 2 to unlock Relics and the Stash.");
+    } else {
+      this.loadoutLockHint.setVisible(false);
+    }
 
     for (let i = 0; i < TOWER_IDS.length; i++) {
       const mark = this.towerMarks[i];
@@ -511,6 +626,12 @@ export class BastionScene extends Phaser.Scene {
     for (let i = 0; i < this.runeViews.length; i++) {
       const view = this.runeViews[i];
       if (!view) continue;
+      if (!runesOn) {
+        view.box.setVisible(false);
+        view.chip.setVisible(false);
+        view.label.setVisible(false);
+        continue;
+      }
       const used = i < runeCount;
       view.box.setVisible(used);
       if (!used) {
@@ -538,6 +659,12 @@ export class BastionScene extends Phaser.Scene {
     for (let i = 0; i < this.relicViews.length; i++) {
       const view = this.relicViews[i];
       if (!view) continue;
+      if (!relicsOn) {
+        view.box.setVisible(false);
+        view.chip.setVisible(false);
+        view.label.setVisible(false);
+        continue;
+      }
       const relic = loadout?.relics[i] ?? null;
       const selected = this.selectedKind === "relic" && this.selectedSlot === i;
       view.box.setVisible(true).setStrokeStyle(selected ? 3 : 2, selected ? Palette.gold : Palette.stoneLight);
@@ -560,8 +687,17 @@ export class BastionScene extends Phaser.Scene {
     this.unsocketBtn.setStrokeStyle(2, filled ? Palette.danger : Palette.stone);
     this.unsocketLabel.setColor(filled ? "#e8e0d4" : "#8a8490");
 
-    this.invRunesMark.setVisible(this.invMode === "rune");
-    this.invRelicsMark.setVisible(this.invMode === "relic");
+    if (!(runesOn || relicsOn)) {
+      for (const view of this.invViews) {
+        view.box.setVisible(false);
+        view.chip.setVisible(false);
+        view.label.setVisible(false);
+      }
+      this.hint.setVisible(false);
+      return;
+    }
+    this.hint.setVisible(true);
+    this.invHeading.setText(this.invMode === "rune" ? "Rune inventory" : "Relic inventory");
 
     if (this.invMode === "rune") {
       const inv = profile.runeInventory;
@@ -665,6 +801,8 @@ export class BastionScene extends Phaser.Scene {
       scene: "bastion",
       helpVisible: this.help.visible,
       helpDismiss: this.help.dismissRect(),
+      menuButton: this.menuRect,
+      unlockOk: this.unlocks.visible ? this.unlocks.okRect : null,
       enterBreach: this.enterRect,
       tabLoadout: this.tabLoadoutRect,
       tabStash: this.tabStashRect,
@@ -732,6 +870,22 @@ export class BastionScene extends Phaser.Scene {
       },
       getProfile: () => getProfile(),
       forceOutcome: () => undefined,
+      resetProfile: () => {
+        resetProfile();
+        this.tab = "loadout";
+        this.refresh();
+      },
+      setHighestDepthCleared: (depth: number) => {
+        setHighestDepthCleared(depth);
+        this.refresh();
+        this.maybeShowUnlock();
+      },
+      clearSeenUnlocks: () => {
+        getProfile().seenUnlocks = [];
+        persistProfile();
+        this.refresh();
+        this.maybeShowUnlock();
+      },
     };
   }
 }

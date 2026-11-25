@@ -12,18 +12,21 @@ export type ShopOffer = {
 export const SHOP_RUNE_PRICE = 22;
 export const SHOP_SIGIL_PRICE = 40;
 
-export function rollShopOffers(rng: () => number = Math.random): ShopOffer[] {
+export function rollShopOffers(rng: () => number = Math.random, opts?: { runes?: boolean }): ShopOffer[] {
   const offers: ShopOffer[] = [];
   const runes = RUNE_IDS.slice();
   const sigils = SIGIL_IDS.slice();
   shuffle(runes, rng);
   shuffle(sigils, rng);
-  for (let i = 0; i < 2; i++) {
-    const id = runes[i] ?? "split-volley";
-    const gem = makeGem("rune", id, 1);
-    offers.push({ uid: gem.uid, gem, price: SHOP_RUNE_PRICE, sold: false });
+  if (opts?.runes !== false) {
+    for (let i = 0; i < 2; i++) {
+      const id = runes[i] ?? "split-volley";
+      const gem = makeGem("rune", id, 1);
+      offers.push({ uid: gem.uid, gem, price: SHOP_RUNE_PRICE, sold: false });
+    }
   }
-  for (let i = 0; i < 2; i++) {
+  const sigilCount = opts?.runes === false ? 4 : 2;
+  for (let i = 0; i < sigilCount; i++) {
     const id = sigils[i] ?? "cinder-orb";
     const gem = makeGem("sigil", id, 1);
     offers.push({ uid: gem.uid, gem, price: SHOP_SIGIL_PRICE, sold: false });

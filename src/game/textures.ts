@@ -161,5 +161,16 @@ export function generateTextures(scene: Phaser.Scene): void {
   g.generateTexture("no-sigil", 24, 24);
   g.clear();
 
+  // Lock badge for gated Bastion tabs (gold stroke so it reads on dark tabs).
+  g.lineStyle(2, 0xe8c547, 1);
+  g.strokeRoundedRect(7, 15, 18, 13, 2);
+  g.beginPath();
+  g.arc(16, 15, 6, Math.PI, 0, false);
+  g.strokePath();
+  g.fillStyle(0xe8c547, 1);
+  g.fillCircle(16, 21, 1.8);
+  g.generateTexture("ui-lock", 32, 32);
+  g.clear();
+
   g.destroy();
 }

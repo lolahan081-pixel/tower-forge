@@ -6,11 +6,12 @@ import { isRelic, type RelicInstance } from "./relics";
 import { RUNE_IDS } from "./runes";
 import { SIGIL_IDS } from "./sigils";
 import { TOWERS, TOWER_IDS, isTowerId, type TowerId } from "./towers";
+import { migrateSeenUnlocks } from "./unlocks";
 
 export type { RelicInstance };
 
 export const PROFILE_STORAGE_KEY = "tower-forge-profile";
-export const PROFILE_VERSION = 2;
+export const PROFILE_VERSION = 3;
 
 export type TowerLoadout = {
   runes: (GemInstance | null)[];
@@ -28,6 +29,11 @@ export type PlayerProfile = {
   unspentPoints: number;
   allocatedNodes: string[];
   highestDepthCleared: number;
+  /** Set the first time the player leaves the main menu into the hub or a Breach. */
+  hasStarted: boolean;
+  /** Feature ids whose unlock popup has been shown. */
+  seenUnlocks: string[];
+  seenBattleHint: boolean;
 };
 
 export function runeSlotCount(towerId: TowerId): number {
@@ -59,6 +65,9 @@ export function createDefaultProfile(): PlayerProfile {
     unspentPoints: 0,
     allocatedNodes: [],
     highestDepthCleared: 0,
+    hasStarted: false,
+    seenUnlocks: [],
+    seenBattleHint: false,
   };
 }
 
@@ -123,6 +132,13 @@ export function sanitizeProfile(raw: unknown): PlayerProfile {
     unspentPoints: typeof rec.unspentPoints === "number" ? Math.max(0, rec.unspentPoints) : 0,
     allocatedNodes: allocated,
     highestDepthCleared: typeof rec.highestDepthCleared === "number" ? Math.max(0, rec.highestDepthCleared) : 0,
+    hasStarted: typeof rec.hasStarted === "boolean" ? rec.hasStarted : typeof rec.highestDepthCleared === "number" && rec.highestDepthCleared > 0,
+    seenUnlocks: migrateSeenUnlocks(
+      typeof rec.highestDepthCleared === "number" ? rec.highestDepthCleared : 0,
+      rec.seenUnlocks,
+    ),
+    // Missing flag on an old save means they have already played.
+    seenBattleHint: typeof rec.seenBattleHint === "boolean" ? rec.seenBattleHint : rec.seenUnlocks === undefined,
   };
 }
 
@@ -306,5 +322,42 @@ export function awardBreachClear(depth: number): void {
   if (depth > profile.highestDepthCleared) profile.highestDepthCleared = depth;
   profile.accountXp += accountXpForClear(depth);
   profile.unspentPoints += pointsForClear(depth);
+  persistProfile();
+}
+
+export function resetProfile(): PlayerProfile {
+  current = createDefaultProfile();
+  persistProfile();
+  try {
+    window.localStorage.removeItem("tower-forge-help-seen");
+  } catch {
+    // ignore
+  }
+  return current;
+}
+
+export function markHasStarted(): void {
+  const profile = getProfile();
+  if (profile.hasStarted) return;
+  profile.hasStarted = true;
+  persistProfile();
+}
+
+export function markUnlockSeen(id: string): void {
+  const profile = getProfile();
+  if (profile.seenUnlocks.includes(id)) return;
+  profile.seenUnlocks.push(id);
+  persistProfile();
+}
+
+export function markBattleHintSeen(): void {
+  const profile = getProfile();
+  profile.seenBattleHint = true;
+  persistProfile();
+}
+
+export function setHighestDepthCleared(depth: number): void {
+  const profile = getProfile();
+  profile.highestDepthCleared = Math.max(0, Math.floor(depth));
   persistProfile();
 }

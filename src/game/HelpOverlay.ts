@@ -16,7 +16,7 @@ export class HelpOverlay {
   constructor(
     scene: Phaser.Scene,
     private readonly onDismissCb: () => void,
-    page: "bastion" | "battle" = "battle",
+    page: "bastion" | "battle" | "menu" = "battle",
   ) {
     const dim = scene.add
       .rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, Palette.overlay, 0.82)
@@ -37,17 +37,23 @@ export class HelpOverlay {
       .text(
         cx,
         cy - 90,
-        (page === "bastion"
+        (page === "menu"
           ? [
-              "Prepare — Socket Runes into a frame loadout here. Every tower of that type uses this loadout in battle. Relics and the Ember Lattice come later.",
-              "Breach — Enter Breach to hold the gate. Built frames start with a starter Sigil. In battle you can swap only the main Sigil.",
-              "Hold the gate — Start Wave to send the Hollow down the path. After a win or loss, return to the Bastion.",
+              "Start a Breach from this menu, or open the Bastion to prepare. The first Depth only asks you to place frames and swap a Sigil.",
+              "More of the Bastion opens as you clear Depths: Runes, Relics and the Stash, the Ember Forge, then the Ember Lattice.",
+              "In battle, tap a stone cell beside the path to build, then tap Start Wave. You can return here from the Bastion or a Breach.",
             ]
-          : [
-              "Build — Choose a frame, then tap a stone cell beside the path. A new frame starts with a starter Sigil and uses your Bastion loadout.",
-              "Sigil — Tap a frame, or Sigil, to swap the main skill gem. Loadout Runes are shown read-only; incompatible ones sit inactive.",
-              "Hold the gate — Tap Start Wave. After a win or loss, return to the Bastion to change Runes.",
-            ]
+          : page === "bastion"
+            ? [
+                "Prepare — Socket what you have unlocked into a frame loadout. Every tower of that type uses this loadout in battle.",
+                "Breach — Enter Breach to hold the gate. Built frames start with a starter Sigil. In battle you can swap only the main Sigil.",
+                "Hold the gate — After a win or loss, return to the Bastion or the main menu. New systems open as you clear Depths.",
+              ]
+            : [
+                "Build — Choose a frame, then tap a stone cell beside the path. A new frame starts with a starter Sigil and uses your Bastion loadout.",
+                "Sigil — Tap a frame, or Sigil, to swap the main skill gem.",
+                "Hold the gate — Tap Start Wave. After a win or loss, return to the Bastion or the main menu.",
+              ]
         ).join("\n\n"),
         {
           font: FONT_BODY,

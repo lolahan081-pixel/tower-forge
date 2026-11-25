@@ -3,8 +3,24 @@ import { makeGem, type GemInstance } from "./items";
 import { rollRelic, type RelicInstance, type RelicRarity } from "./relics";
 import { RUNE_IDS } from "./runes";
 import { SIGIL_IDS } from "./sigils";
+import { isFeatureUnlocked } from "./unlocks";
 
 export type EnemyRarity = "normal" | "magic" | "rare" | "unique";
+
+export type DropKind = "relic" | "sigil" | "rune" | "currency";
+
+export type AllowedDrops = { relic: boolean; sigil: boolean; rune: boolean; currency: boolean };
+
+export const ALL_DROPS: AllowedDrops = { relic: true, sigil: true, rune: true, currency: true };
+
+export function allowedDropsFor(highestDepthCleared: number): AllowedDrops {
+  return {
+    sigil: true,
+    rune: isFeatureUnlocked("runes", highestDepthCleared),
+    relic: isFeatureUnlocked("relics", highestDepthCleared),
+    currency: isFeatureUnlocked("forge", highestDepthCleared),
+  };
+}
 
 export type SpoilsItem =
   | { kind: "relic"; item: RelicInstance }
@@ -49,8 +65,21 @@ function rollRelicRarity(source: EnemyRarity, rng: () => number): RelicRarity {
   return "normal";
 }
 
-export function rollDrop(source: EnemyRarity, depth: number, rng: () => number = Math.random): SpoilsItem | null {
-  const kind = pickWeighted(WEIGHTS[source], rng);
+export function rollDrop(
+  source: EnemyRarity,
+  depth: number,
+  rng: () => number = Math.random,
+  allowed: AllowedDrops = ALL_DROPS,
+): SpoilsItem | null {
+  const base = WEIGHTS[source];
+  const weights: Weights = {
+    nothing: base.nothing,
+    relic: allowed.relic ? base.relic : 0,
+    sigil: allowed.sigil ? base.sigil : 0,
+    rune: allowed.rune ? base.rune : 0,
+    currency: allowed.currency ? base.currency : 0,
+  };
+  const kind = pickWeighted(weights, rng);
   if (kind === "nothing") return null;
   const ilvl = Math.max(1, depth * 2);
   if (kind === "relic") return { kind: "relic", item: rollRelic(ilvl, rollRelicRarity(source, rng), rng) };
@@ -68,11 +97,16 @@ export function rollDrop(source: EnemyRarity, depth: number, rng: () => number =
 }
 
 /** Bosses and rares drop extra rolls. */
-export function rollKillDrops(source: EnemyRarity, depth: number, rng: () => number = Math.random): SpoilsItem[] {
+export function rollKillDrops(
+  source: EnemyRarity,
+  depth: number,
+  rng: () => number = Math.random,
+  allowed: AllowedDrops = ALL_DROPS,
+): SpoilsItem[] {
   const extra = source === "unique" ? 3 : source === "rare" ? 2 : 1;
   const out: SpoilsItem[] = [];
   for (let i = 0; i < extra; i++) {
-    const item = rollDrop(source, depth, rng);
+    const item = rollDrop(source, depth, rng, allowed);
     if (item) out.push(item);
   }
   return out;

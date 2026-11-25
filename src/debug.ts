@@ -6,7 +6,7 @@ export type GemSnap = { uid: string; defId: string; kind: string; level: number;
 
 export type UiRects = {
   game: { w: number; h: number };
-  scene: "bastion" | "game";
+  scene: "bastion" | "game" | "menu";
   helpVisible: boolean;
   helpDismiss: UiRect;
   startWave: UiRect;
@@ -32,6 +32,15 @@ export type UiRects = {
   invTabRunes?: UiRect;
   invTabRelics?: UiRect;
   returnToBastion: UiRect | null;
+  menuButton?: UiRect;
+  menuStart?: UiRect;
+  menuBastion?: UiRect;
+  menuHowToPlay?: UiRect;
+  menuSettings?: UiRect;
+  settingsCancel?: UiRect | null;
+  settingsConfirm?: UiRect | null;
+  unlockOk?: UiRect | null;
+  battleHintOk?: UiRect | null;
   panel: {
     close: UiRect;
     unsocket: UiRect;
@@ -81,12 +90,18 @@ export type GameSnapshot = {
   }[];
 };
 
+export type MenuSnapshot = {
+  ready: boolean;
+  scene: "menu";
+  hasStarted: boolean;
+};
+
 export type TowerForgeDebug = {
   ready: boolean;
-  scene: "bastion" | "game";
+  scene: "bastion" | "game" | "menu";
   placeTower: (col: number, row: number, towerId?: string) => boolean;
   startWave: () => boolean;
-  getState: () => HubSnapshot | GameSnapshot;
+  getState: () => HubSnapshot | GameSnapshot | MenuSnapshot;
   firstBuildableNearPath: () => { col: number; row: number };
   stress: (count: number) => { spawned: number; fps: number };
   enemyPositions: () => { x: number; y: number; progress: number; hp: number }[];
@@ -110,6 +125,10 @@ export type TowerForgeDebug = {
   guaranteeRarity?: (rarity?: "off" | "normal" | "magic" | "rare" | "unique") => void;
   spawnModified?: (rarity?: "normal" | "magic" | "rare" | "unique") => unknown;
   setTimeScale?: (scale: number) => void;
+  resetProfile?: () => void;
+  setHighestDepthCleared?: (depth: number) => void;
+  clearSeenUnlocks?: () => void;
+  markHasStarted?: () => void;
 };
 
 declare global {

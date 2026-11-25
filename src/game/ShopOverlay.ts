@@ -19,6 +19,7 @@ export class ShopOverlay {
   private readonly offerChips: Phaser.GameObjects.Rectangle[] = [];
   private readonly buyLabels: Phaser.GameObjects.Text[] = [];
   private readonly buyBoxes: Phaser.GameObjects.Rectangle[] = [];
+  private readonly offerRows: Phaser.GameObjects.Rectangle[] = [];
   private offers: ShopOffer[] = [];
   private gold = 0;
 
@@ -61,6 +62,7 @@ export class ShopOverlay {
       this.offerChips.push(chip);
       this.buyLabels.push(buyLabel);
       this.buyBoxes.push(buy);
+      this.offerRows.push(box);
       children.push(box, chip, label, buy, buyLabel);
     }
 
@@ -131,14 +133,29 @@ export class ShopOverlay {
   }
 
   private redraw(): void {
-    this.goldText.setText(`Gold  ${this.gold}    ·    basic Runes and level-1 Sigils`);
+    const hasRunes = this.offers.some((o) => o.gem.kind === "rune");
+    this.goldText.setText(`Gold  ${this.gold}    ·    ${hasRunes ? "basic Runes and level-1 Sigils" : "level-1 Sigils"}`);
     for (let i = 0; i < 4; i++) {
       const offer = this.offers[i];
       const label = this.offerLabels[i];
       const chip = this.offerChips[i];
       const buy = this.buyLabels[i];
       const box = this.buyBoxes[i];
-      if (!offer || !label || !chip || !buy || !box) continue;
+      const row = this.offerRows[i];
+      if (!label || !chip || !buy || !box) continue;
+      if (!offer) {
+        label.setVisible(false);
+        chip.setVisible(false);
+        buy.setVisible(false);
+        box.setVisible(false);
+        row?.setVisible(false);
+        continue;
+      }
+      label.setVisible(true);
+      chip.setVisible(true);
+      buy.setVisible(true);
+      box.setVisible(true);
+      row?.setVisible(true);
       chip.setFillStyle(gemColor(offer.gem), 1);
       const kind = offer.gem.kind === "sigil" ? "Sigil" : "Rune";
       label.setText(`${gemName(offer.gem)}  ·  ${kind} L1`);

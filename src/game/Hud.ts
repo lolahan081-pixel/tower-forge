@@ -18,11 +18,16 @@ export class Hud {
   private readonly overlayText: Phaser.GameObjects.Text;
   private readonly returnBtn: Phaser.GameObjects.Rectangle;
   private readonly returnLabel: Phaser.GameObjects.Text;
+  private readonly menuBtn: Phaser.GameObjects.Rectangle;
+  private readonly menuEndBtn: Phaser.GameObjects.Rectangle;
+  private readonly menuEndLabel: Phaser.GameObjects.Text;
   private readonly selectMarks: Phaser.GameObjects.Rectangle[] = [];
   private readonly towerRects: Record<string, UiRect> = {};
   readonly startRect: UiRect;
   readonly inscribeRect: UiRect;
   readonly returnRect: UiRect;
+  readonly menuRect: UiRect;
+  readonly menuEndRect: UiRect;
 
   constructor(
     scene: Phaser.Scene,
@@ -30,11 +35,30 @@ export class Hud {
     onStart: () => void,
     onInscribe: () => void,
     onReturn: () => void,
+    onMenu: () => void,
   ) {
     const style = { font: FONT_HUD, color: "#e8e0d4" };
     this.goldText = scene.add.text(16, HUD_Y + 6, "", style).setDepth(20);
     this.livesText = scene.add.text(200, HUD_Y + 6, "", style).setDepth(20);
     this.waveText = scene.add.text(390, HUD_Y + 6, "", style).setDepth(20);
+
+    const menuW = 160;
+    this.menuRect = { x: 16, y: 8, w: menuW, h: BTN_H };
+    this.menuBtn = scene.add
+      .rectangle(16 + menuW / 2, 8 + BTN_H / 2, menuW, BTN_H, 0x1a161c, 1)
+      .setStrokeStyle(2, Palette.stoneLight)
+      .setDepth(30)
+      .setInteractive({ useHandCursor: true });
+    scene.add
+      .text(16 + menuW / 2, 8 + BTN_H / 2, "MENU", { font: FONT_BTN, color: "#e8e0d4" })
+      .setOrigin(0.5)
+      .setDepth(31);
+    this.menuBtn.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+      pointer.event.stopPropagation();
+      onMenu();
+    });
+    this.menuBtn.on("pointerover", () => this.menuBtn.setStrokeStyle(3, Palette.gold));
+    this.menuBtn.on("pointerout", () => this.menuBtn.setStrokeStyle(2, Palette.stoneLight));
 
     const btnY = HUD_Y + 28;
     const gap = 10;
@@ -141,6 +165,26 @@ export class Hud {
     });
     this.returnBtn.on("pointerover", () => this.returnBtn.setStrokeStyle(3, Palette.goldBright));
     this.returnBtn.on("pointerout", () => this.returnBtn.setStrokeStyle(2, Palette.gold));
+
+    const menuEndY = retY + BTN_H + 12;
+    this.menuEndRect = { x: retX, y: menuEndY, w: retW, h: BTN_H };
+    this.menuEndBtn = scene.add
+      .rectangle(retX + retW / 2, menuEndY + BTN_H / 2, retW, BTN_H, 0x1a161c, 1)
+      .setStrokeStyle(2, Palette.stoneLight)
+      .setDepth(42)
+      .setInteractive({ useHandCursor: true })
+      .setVisible(false);
+    this.menuEndLabel = scene.add
+      .text(retX + retW / 2, menuEndY + BTN_H / 2, "MAIN MENU", { font: FONT_BTN, color: "#e8e0d4" })
+      .setOrigin(0.5)
+      .setDepth(43)
+      .setVisible(false);
+    this.menuEndBtn.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+      pointer.event.stopPropagation();
+      onMenu();
+    });
+    this.menuEndBtn.on("pointerover", () => this.menuEndBtn.setStrokeStyle(3, Palette.gold));
+    this.menuEndBtn.on("pointerout", () => this.menuEndBtn.setStrokeStyle(2, Palette.stoneLight));
   }
 
   refresh(args: {
@@ -187,14 +231,23 @@ export class Hud {
     }
     this.returnBtn.setVisible(ended);
     this.returnLabel.setVisible(ended);
+    this.menuEndBtn.setVisible(ended);
+    this.menuEndLabel.setVisible(ended);
   }
 
   isOverHud(worldY: number): boolean {
     return worldY >= HUD_Y;
   }
 
-  rects(): { startWave: UiRect; inscribe: UiRect; towers: Record<string, UiRect>; returnToBastion: UiRect } {
-    return { startWave: this.startRect, inscribe: this.inscribeRect, towers: this.towerRects, returnToBastion: this.returnRect };
+  rects(): { startWave: UiRect; inscribe: UiRect; towers: Record<string, UiRect>; returnToBastion: UiRect; menuButton: UiRect; menuEnd: UiRect } {
+    return {
+      startWave: this.startRect,
+      inscribe: this.inscribeRect,
+      towers: this.towerRects,
+      returnToBastion: this.returnRect,
+      menuButton: this.menuRect,
+      menuEnd: this.menuEndRect,
+    };
   }
 }
 
