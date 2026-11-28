@@ -25,6 +25,7 @@ export const Palette = {
   danger: 0xd4544a,
   hover: 0xc9a227,
   invalid: 0x6a2424,
+  valid: 0x5a8a4a,
   overlay: 0x08070a,
   hp: 0x6e1a1a,
   hpBg: 0x1a1212,

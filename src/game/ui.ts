@@ -5,6 +5,10 @@ export type UiRect = { x: number; y: number; w: number; h: number };
 
 export const BTN_H = 88;
 
+/** Battle and main-menu MENU; 96 * iPhone 12 landscape FIT (390/792) ≈ 47px. */
+export const MENU_BTN_H = 96;
+export const MENU_BTN_W = 168;
+
 export function containsRect(r: UiRect, x: number, y: number): boolean {
   return x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
 }
@@ -76,4 +80,11 @@ export function setTreeInput(root: Phaser.GameObjects.Container, enabled: boolea
     }
   };
   apply(root);
+}
+
+/** Short pop used when a panel opens. Resets position so repeated shows do not drift. */
+export function popIn(scene: Phaser.Scene, obj: Phaser.GameObjects.Container, x: number, y: number, dy = 10): void {
+  scene.tweens.killTweensOf(obj);
+  obj.setPosition(x, y + dy).setAlpha(0);
+  scene.tweens.add({ targets: obj, alpha: 1, y, duration: 140, ease: "Cubic.Out" });
 }

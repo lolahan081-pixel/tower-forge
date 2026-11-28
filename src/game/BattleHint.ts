@@ -5,7 +5,7 @@ import { UiButton } from "./UiButton";
 import { BTN_H, FONT_BODY, FONT_TITLE, setTreeInput, type UiRect } from "./ui";
 
 const CARD_W = 640;
-const CARD_H = 340;
+const CARD_H = 380;
 const BTN_W = 240;
 
 /** Short first-run coach card shown in the opening Breach. */
@@ -27,7 +27,7 @@ export class BattleHint {
       .text(
         cx,
         cy - 50,
-        "Tap a stone cell beside the path to place a frame. It starts with a Sigil and will fire on its own.\n\nThen tap Start Wave to send the Hollow down the path.",
+        "Pick a frame from the bar below. Glowing cells can hold it, and a ghost shows how far it can reach. Tap a cell to place it, or Cancel to back out.\n\nOn a phone, confirm the cell so it is not dropped by accident. Tap a placed frame to change its Sigil or sell it, then start the wave.",
         { font: FONT_BODY, color: "#e8e0d4", align: "center", wordWrap: { width: CARD_W - 72 }, lineSpacing: 5 },
       )
       .setOrigin(0.5, 0);

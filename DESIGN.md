@@ -15,7 +15,7 @@ The last fortress that still guards a gate against the Hollow mist. Dark fantasy
 
 ## Core loop
 
-Main menu (Start / Continue, Bastion, How to Play, Settings) → optionally prepare in the Bastion → open the Ember Atlas and pick a node → Enter Breach (~10 waves, Unique boss on the last) → place frames → optionally swap the Sigil → fight, shop between waves, auto-collect spoils → clear the node to unlock its neighbors, award account XP and Lattice points, unlock any new systems, take spoils into the stash. After a win, Next returns to the Atlas with the newly opened road highlighted. Menu is reachable from the hub and from a Breach.
+Main menu (Start / Continue, Bastion, How to Play, Settings) → optionally prepare in the Bastion → open the Ember Atlas and pick a node → Enter Breach (~10 waves, Unique boss on the last) → pick a frame from the bar, place it on a glowing cell (confirm on a phone), tap a placed frame to change its Sigil or sell it → fight, shop between waves, auto-collect spoils → clear the node to unlock its neighbors, award account XP and Lattice points, unlock any new systems, take spoils into the stash. After a win, Next returns to the Atlas with the newly opened road highlighted. Menu is reachable from the hub and from a Breach.
 
 ## Unlock order
 
@@ -29,8 +29,8 @@ Conditions and tutorial copy live in `src/data/unlocks.ts`. Existing saves inher
 
 ## Systems
 
-- **Sigils & Runes.** One active Sigil per frame, swapped in battle. Loadout Runes apply only when every Rune tag is on the current Sigil. Gems gain XP from that frame’s kills.
-- **Shop.** Between waves, the Ashen Peddler sells basic level-1 Sigils for gold (with a short first-time explanation); Runes join the stall once unlocked. Bought Sigils go to the bag and are swapped with the SIGIL button. Rare and high-level gems are drop-only.
+- **Sigils & Runes.** One active Sigil per frame, swapped in battle from a short panel on the frame (plain DPS / range / rate, or “Tap to choose a Sigil” when empty). Loadout Runes apply only when every Rune tag is on the current Sigil. Gems gain XP from that frame’s kills. A frame can be sold back for 70% of its cost.
+- **Shop.** Between waves, the Ashen Peddler sells basic level-1 Sigils for gold (with a short first-time explanation); Runes join the stall once unlocked. Bought Sigils go to the bag; tap a placed frame in battle to swap them on. Rare and high-level gems are drop-only.
 - **Relics & affixes.** 1–2 slots per frame type. Bases have implicits. Normal / Magic (1 prefix + 1 suffix) / Rare (up to 3+3). Prefixes = damage, suffixes = utility. Affix tiers follow item level. Equipped Relics change resolved stats.
 - **Drops.** Enemies drop Relics, Sigils, Runes, and currency (weights in data; rares and the boss drop more). Locked types are omitted. Loot auto-collects into spoils, shown at the end of a Breach, then moves to the stash.
 - **Currency (fully random crafting).** Kindle Shard, Ash Mote, Crown Cinder, Sovereign Ember, Rift Salt, Null Ash, Blight Heart (corrupt, then locks), Unbinding Tear (Lattice respec). Used at the Ember Forge once it is open.

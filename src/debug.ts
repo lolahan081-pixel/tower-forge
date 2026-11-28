@@ -50,7 +50,14 @@ export type UiRects = {
     currentSigil?: UiRect;
     inventory: UiRect[];
     runes?: UiRect[];
+    changeSigil?: UiRect;
+    sell?: UiRect;
+    picker?: { close: UiRect; remove: UiRect | null; cells: UiRect[] } | null;
   } | null;
+  cancelPlace?: UiRect | null;
+  confirmPlace?: UiRect | null;
+  placing?: boolean;
+  pendingCell?: { col: number; row: number } | null;
 };
 
 export type HubSnapshot = {

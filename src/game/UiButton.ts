@@ -57,17 +57,23 @@ export class UiButton {
       this.hover = false;
       this.pressed = false;
       this.paint();
+      scene.tweens.killTweensOf(this.box);
+      scene.tweens.add({ targets: this.box, scaleX: 1, scaleY: 1, duration: 80, ease: "Quad.Out" });
     });
     this.root.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
       if (!this.enabled || pointer.rightButtonDown()) return;
       this.pressed = true;
       this.paint();
+      scene.tweens.killTweensOf(this.box);
+      scene.tweens.add({ targets: this.box, scaleX: 0.96, scaleY: 0.96, duration: 60, ease: "Quad.Out" });
     });
     this.root.on("pointerup", (pointer: Phaser.Input.Pointer) => {
       if (!this.enabled || pointer.rightButtonDown()) return;
       const fire = this.pressed;
       this.pressed = false;
       this.paint();
+      scene.tweens.killTweensOf(this.box);
+      scene.tweens.add({ targets: this.box, scaleX: 1, scaleY: 1, duration: 80, ease: "Quad.Out" });
       if (fire) this.onClick();
     });
     this.paint();

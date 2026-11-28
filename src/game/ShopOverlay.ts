@@ -190,8 +190,8 @@ export class ShopOverlay {
     this.goldText.setText(`Gold  ${this.gold}`);
     this.helpText.setText(
       hasRunes
-        ? "A stall between waves. Gold from kills and waves buys level-1 Sigils and basic Runes. Bought Sigils go to your bag — swap them onto a frame with the SIGIL button. Socket Runes in the Bastion."
-        : "A stall between waves. Gold from kills and waves buys level-1 Sigils. Bought Sigils go to your bag; swap them onto a frame with the SIGIL button.",
+        ? "A stall between waves. Gold from kills and waves buys level-1 Sigils and basic Runes. Bought Sigils go to your bag — tap a placed frame to swap them on. Socket Runes in the Bastion."
+        : "A stall between waves. Gold from kills and waves buys level-1 Sigils. Bought Sigils go to your bag; tap a placed frame to swap them on.",
     );
     this.bagText.setText(this.info.owned ? `In your bag:  ${this.info.owned}` : "In your bag:  none yet beyond your starting Sigils.");
     this.equippedText.setText(this.info.equipped ? `On your frames:  ${this.info.equipped}` : "On your frames:  none placed.");

@@ -44,8 +44,8 @@ export class HelpOverlay {
                 "Hold the gate — After a win or loss, return to the Bastion or the main menu. New systems open as you clear Depths.",
               ]
             : [
-                "Build — Choose a frame, then tap a stone cell beside the path. A new frame starts with a starter Sigil and uses your Bastion loadout.",
-                "Sigil — Tap a frame, or Sigil, to swap the main skill gem. Bought Sigils from the Peddler go to your bag.",
+                "Build — Pick a frame from the bar. Glowing cells can hold it; a ghost shows its reach. Tap to place, or Cancel / Esc to back out. On a phone, confirm the cell so it is not dropped by accident. A new frame starts with a starter Sigil and uses your Bastion loadout.",
+                "Sigil — Tap a placed frame for a short panel: change the Sigil from your bag, or sell the frame for some of its gold. Bought Sigils from the Peddler go to your bag.",
                 "Hold the gate — Tap Start Wave. Between waves the Ashen Peddler sells gems for gold. After a win or loss, return to the Bastion or the main menu.",
               ]
         ).join("\n\n"),

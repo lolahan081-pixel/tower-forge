@@ -58,3 +58,11 @@ export const TOWER_IDS: TowerId[] = ["ember-spire", "blood-font"];
 export function isTowerId(value: string): value is TowerId {
   return value === "ember-spire" || value === "blood-font";
 }
+
+/** Fraction of the build cost returned when a frame is sold. */
+export const SELL_REFUND = 0.7;
+
+export function sellRefund(cost: number): number {
+  return Math.max(0, Math.floor(cost * SELL_REFUND));
+}
+

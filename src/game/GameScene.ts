@@ -24,7 +24,7 @@ import {
 import { isSigilId, SIGILS } from "../data/sigils";
 import { latticeForTags } from "../data/lattice";
 import { grantSocketXp, resolveLoadout, sigilFitsFrame, type ResolvedAttack } from "../data/stats";
-import { TOWERS, isTowerId, type TowerId } from "../data/towers";
+import { sellRefund, TOWERS, isTowerId, type TowerId } from "../data/towers";
 import { Palette } from "../palette";
 import { collectInRadius, findChainTarget, findNearestToExit } from "../sim/combat";
 import { EnemyPool, tickEnemyAuras, type Enemy } from "../sim/EnemyPool";
@@ -40,14 +40,15 @@ import { HelpOverlay } from "./HelpOverlay";
 import { Hud, pointerToCell } from "./Hud";
 import { rollShopOffers } from "../data/shop";
 import { ShopOverlay } from "./ShopOverlay";
-import { SigilPanel } from "./SigilPanel";
+import { TowerPanel } from "./TowerPanel";
 import { SpoilsOverlay } from "./SpoilsOverlay";
 import { drawBoard } from "./drawMap";
 import { gemName } from "./gems";
 import { applySprite, hookAttackIdle, playSpriteAnim } from "./sprites";
 import { generateTextures } from "./textures";
 import type { PlacedTower } from "./towerState";
-import { pointerWorld, prepareSceneInput, startScene } from "./ui";
+import { UiButton } from "./UiButton";
+import { BTN_H, containsRect, MENU_BTN_H, pointerWorld, prepareSceneInput, startScene, type UiRect } from "./ui";
 
 export type Outcome = "playing" | "won" | "lost";
 
@@ -55,7 +56,7 @@ export class GameScene extends Phaser.Scene {
   private gold = STARTING_GOLD;
   private lives = STARTING_LIVES;
   private outcome: Outcome = "playing";
-  private selected: TowerId = "ember-spire";
+  private selected: TowerId | null = null;
   private towers: PlacedTower[] = [];
   private occupied = new Set<string>();
   private enemies!: EnemyPool;
@@ -65,7 +66,7 @@ export class GameScene extends Phaser.Scene {
   private fx!: FxPool;
   private waves = new WaveController();
   private hud!: Hud;
-  private panel!: SigilPanel;
+  private panel!: TowerPanel;
   private help!: HelpOverlay;
   private battleHint!: BattleHint;
   private lastTower: PlacedTower | null = null;
@@ -81,8 +82,12 @@ export class GameScene extends Phaser.Scene {
   private forceRarity: "off" | EnemyRarity = "off";
   private shop!: ShopOverlay;
   private timeScale = 1;
-  private hover!: Phaser.GameObjects.Rectangle;
-  private rangePreview!: Phaser.GameObjects.Graphics;
+  private tileGlow!: Phaser.GameObjects.Graphics;
+  private ghost!: Phaser.GameObjects.Sprite;
+  private ghostRange!: Phaser.GameObjects.Graphics;
+  private confirmBtn!: UiButton;
+  private confirmRect: UiRect = { x: 0, y: 0, w: 0, h: 0 };
+  private pendingCell: { col: number; row: number } | null = null;
   private hudDirty = true;
   private fpsEma = 60;
   private stressMode = false;
@@ -120,25 +125,33 @@ export class GameScene extends Phaser.Scene {
     this.novas = new NovaPool(this, 8);
     this.fx = new FxPool(this, applySprite, 24);
 
-    this.hover = this.add
-      .rectangle(0, 0, TILE_SIZE - 2, TILE_SIZE - 2)
-      .setStrokeStyle(2, Palette.gold)
-      .setFillStyle(Palette.gold, 0.08)
-      .setDepth(3)
-      .setVisible(false);
-    this.rangePreview = this.add.graphics().setDepth(2);
+    this.tileGlow = this.add.graphics().setDepth(2);
+    this.ghostRange = this.add.graphics().setDepth(3);
+    this.ghost = this.add.sprite(0, 0, "ember-spire").setDepth(4).setVisible(false).setAlpha(0.75);
+    this.confirmBtn = new UiButton(this, {
+      x: 0,
+      y: 0,
+      w: 168,
+      h: BTN_H,
+      label: "PLACE",
+      style: "emph",
+      depth: 25,
+      onClick: () => this.confirmPending(),
+    });
+    this.confirmBtn.setVisible(false);
+
+    this.input.mouse?.disableContextMenu();
 
     this.hud = new Hud(
       this,
       (id) => {
-        this.selected = id;
-        this.hudDirty = true;
+        this.toggleBuild(id);
       },
       () => {
         this.tryStartWave();
       },
       () => {
-        this.openInscribe();
+        this.cancelBuild();
       },
       () => {
         this.returnToBastion();
@@ -155,11 +168,11 @@ export class GameScene extends Phaser.Scene {
       this.hudDirty = true;
     }, "battle");
 
-    this.panel = new SigilPanel(this, {
+    this.panel = new TowerPanel(this, {
       inventory: () => getProfile().sigilInventory,
-      loadoutRunes: (tower) => getProfile().loadouts[tower.id]?.runes ?? [],
       swap: (tower, uid) => this.trySwapSigil(tower, uid),
       unsocket: (tower) => this.tryUnsocketSigil(tower),
+      sell: (tower) => this.trySell(tower),
     });
 
     this.spoilsOverlay = new SpoilsOverlay(this, () => {
@@ -184,12 +197,16 @@ export class GameScene extends Phaser.Scene {
 
     this.shopHint = new MessagePopup(this, 92);
     this.input.on("pointermove", (pointer: Phaser.Input.Pointer) => {
+      if (pointer.wasTouch || this.pendingCell) return;
       const pt = pointerWorld(this, pointer);
-      this.updateHover(pt.x, pt.y);
+      this.followGhost(pt.x, pt.y);
     });
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
-      if (pointer.rightButtonDown()) return;
       const pt = pointerWorld(this, pointer);
+      if (pointer.rightButtonDown()) {
+        this.cancelBuild();
+        return;
+      }
       if (this.shopHint.visible) {
         this.shopHint.handleTap(pt.x, pt.y);
         return;
@@ -211,33 +228,49 @@ export class GameScene extends Phaser.Scene {
         return;
       }
       if (this.panel.visible) {
+        const open = this.panel.openTower;
         this.panel.handleTap(pt.x, pt.y);
+        if (!this.panel.visible && open) this.showTowerRange(null);
         return;
       }
+      if (this.confirmBtn.visible && containsRect(this.confirmRect, pt.x, pt.y)) return;
       if (this.hud.isOverMenu(pt.x, pt.y) || this.hud.isOverHud(pt.y)) return;
       const cell = pointerToCell(pt.x, pt.y);
       const existing = this.towerAt(cell.col, cell.row);
       if (existing) {
+        this.cancelBuild();
         this.lastTower = existing;
         this.panel.show(existing);
+        this.showTowerRange(existing);
         return;
       }
-      this.tryBuild(cell.col, cell.row, this.selected);
+      if (this.selected) {
+        if (this.confirmToPlace(pointer)) {
+          this.setPendingCell(cell.col, cell.row);
+          return;
+        }
+        if (this.tryBuild(cell.col, cell.row, this.selected)) this.afterPlace();
+        else this.followGhost(pt.x, pt.y);
+        return;
+      }
     });
 
     this.input.keyboard?.on("keydown-ONE", () => {
-      this.selected = "ember-spire";
-      this.hudDirty = true;
+      this.toggleBuild("ember-spire");
     });
     this.input.keyboard?.on("keydown-TWO", () => {
-      this.selected = "blood-font";
-      this.hudDirty = true;
+      this.toggleBuild("blood-font");
     });
     this.input.keyboard?.on("keydown-SPACE", () => {
       this.tryStartWave();
     });
     this.input.keyboard?.on("keydown-ESC", () => {
-      this.panel.hide();
+      if (this.panel.visible) {
+        this.panel.handleTap(-1, -1);
+        if (!this.panel.visible) this.showTowerRange(null);
+        return;
+      }
+      this.cancelBuild();
     });
 
     this.hud.refresh(this.hudArgs());
@@ -254,7 +287,8 @@ export class GameScene extends Phaser.Scene {
     this.gold = startingGoldForDepth(this.depth);
     this.lives = livesForDepth(this.depth);
     this.outcome = "playing";
-    this.selected = "ember-spire";
+    this.selected = null;
+    this.pendingCell = null;
     this.towers = [];
     this.occupied = new Set();
     this.lastTower = null;
@@ -292,14 +326,6 @@ export class GameScene extends Phaser.Scene {
     persistProfile();
     startScene(this, "menu");
   }
-
-  private openInscribe(): void {
-    if (this.help.visible) return;
-    const tower = this.lastTower ?? this.towers[this.towers.length - 1];
-    if (!tower) return;
-    this.panel.show(tower);
-  }
-
 
   update(time: number, delta: number): void {
     const dtMs = delta * this.timeScale;
@@ -345,7 +371,7 @@ export class GameScene extends Phaser.Scene {
 
   tryBuild(col: number, row: number, towerId: TowerId): boolean {
     if (this.outcome !== "playing") return false;
-    if (!isBuildableTile(col, row, this.layout.tiles)) return false;
+    if (!this.canBuildAt(col, row)) return false;
     const key = `${col},${row}`;
     if (this.occupied.has(key)) return false;
     const def = TOWERS[towerId];
@@ -389,6 +415,7 @@ export class GameScene extends Phaser.Scene {
     this.occupied.add(key);
     this.gold -= def.cost;
     this.hudDirty = true;
+    this.redrawGlow();
     return true;
   }
 
@@ -434,7 +461,11 @@ export class GameScene extends Phaser.Scene {
     const tags = sigil && isSigilId(sigil.defId) ? SIGILS[sigil.defId].tags : [];
     tower.resolved = resolveLoadout(TOWERS[tower.id], sigil, tower.sockets.slice(1), loadout?.relics ?? [], latticeForTags(tags));
     this.syncBadge(tower);
-    if (this.panel.openTower === tower) this.panel.refresh();
+    this.syncRangeGfx(tower);
+    if (this.panel.openTower === tower) {
+      this.panel.refresh();
+      this.showTowerRange(tower);
+    }
   }
 
   private syncBadge(tower: PlacedTower): void {
@@ -464,7 +495,7 @@ export class GameScene extends Phaser.Scene {
     if (!getProfile().seenShopHint) {
       this.shopHint.show(
         "The Ashen Peddler",
-        "This stall appears between waves. Spend gold from kills and waves on Sigils. Bought Sigils go to your bag; swap them onto a frame with the SIGIL button.\n\nRunes join the stall once you have cleared Depth 1.",
+        "This stall appears between waves. Spend gold from kills and waves on Sigils. Bought Sigils go to your bag; tap a placed frame to swap them on.\n\nRunes join the stall once you have cleared Depth 1.",
         () => markShopHintSeen(),
       );
     }
@@ -721,41 +752,186 @@ export class GameScene extends Phaser.Scene {
     if (this.spoils.length > 0) this.spoilsOverlay.show(this.spoils);
   }
 
-  private updateHover(x: number, y: number): void {
-    if (this.hud.isOverHud(y) || this.panel.contains(x, y) || this.outcome !== "playing") {
-      this.hover.setVisible(false);
-      this.rangePreview.clear();
-      return;
-    }
-    const { col, row } = pointerToCell(x, y);
-    if (!isInBounds(col, row) || row >= MAP_ROWS) {
-      this.hover.setVisible(false);
-      this.rangePreview.clear();
-      return;
-    }
-    const { x: cx, y: cy } = cellCenter(col, row);
-    const key = `${col},${row}`;
-    if (this.occupied.has(key)) {
-      this.hover.setVisible(false);
-      this.rangePreview.clear();
-      return;
-    }
-    const ok = isBuildableTile(col, row, this.layout.tiles);
-    this.hover
-      .setPosition(cx, cy)
-      .setStrokeStyle(2, ok ? Palette.gold : Palette.invalid)
-      .setFillStyle(ok ? Palette.gold : Palette.invalid, 0.08)
-      .setVisible(true);
 
-    this.rangePreview.clear();
-    if (ok) {
-      const def = TOWERS[this.selected];
-      this.rangePreview.lineStyle(1, def.accent, 0.45);
-      this.rangePreview.strokeCircle(cx, cy, def.stats.range);
+
+  private confirmToPlace(pointer: Phaser.Input.Pointer): boolean {
+    if (pointer.wasTouch) return true;
+    const h = this.scale.displaySize?.height ?? this.game.canvas.clientHeight;
+    return h <= 500;
+  }
+
+  private toggleBuild(id: TowerId): void {
+    if (this.selected === id) {
+      this.cancelBuild();
+      return;
+    }
+    this.beginBuild(id);
+  }
+
+  private beginBuild(id: TowerId): void {
+    if (this.outcome !== "playing") return;
+    if (this.gold < TOWERS[id].cost) return;
+    if (this.panel.visible) {
+      this.panel.hide();
+      this.showTowerRange(null);
+    }
+    this.selected = id;
+    this.pendingCell = null;
+    this.hideConfirm();
+    this.redrawGlow();
+    this.hudDirty = true;
+    const pointer = this.input.activePointer;
+    if (pointer && !pointer.wasTouch) this.followGhost(pointer.worldX, pointer.worldY);
+  }
+
+  private cancelBuild(): void {
+    this.selected = null;
+    this.pendingCell = null;
+    this.hideConfirm();
+    this.hideGhost();
+    this.tileGlow.clear();
+    this.hudDirty = true;
+  }
+
+  private afterPlace(): void {
+    this.pendingCell = null;
+    this.hideConfirm();
+    this.hideGhost();
+    if (this.selected && this.gold < TOWERS[this.selected].cost) this.cancelBuild();
+    else this.redrawGlow();
+  }
+
+  private tileHitsMenu(col: number, row: number): boolean {
+    const x = col * TILE_SIZE;
+    const y = row * TILE_SIZE;
+    const r = this.hud.menuRect;
+    return x < r.x + r.w && x + TILE_SIZE > r.x && y < r.y + r.h && y + TILE_SIZE > r.y;
+  }
+
+  private canBuildAt(col: number, row: number): boolean {
+    if (!isInBounds(col, row) || row >= MAP_ROWS) return false;
+    const { y } = cellCenter(col, row);
+    if (this.tileHitsMenu(col, row) || this.hud.isOverHud(y)) return false;
+    if (!isBuildableTile(col, row, this.layout.tiles)) return false;
+    return !this.occupied.has(`${col},${row}`);
+  }
+
+  private redrawGlow(): void {
+    this.tileGlow.clear();
+    if (!this.selected || this.outcome !== "playing") return;
+    this.tileGlow.fillStyle(Palette.gold, 0.1);
+    this.tileGlow.lineStyle(1, Palette.gold, 0.22);
+    for (let row = 0; row < MAP_ROWS; row++) {
+      for (let col = 0; col < 20; col++) {
+        if (!this.canBuildAt(col, row)) continue;
+        const { x, y } = cellCenter(col, row);
+        this.tileGlow.fillRect(x - 21, y - 21, 42, 42);
+        this.tileGlow.strokeRect(x - 21, y - 21, 42, 42);
+      }
     }
   }
 
-  private hudArgs() {
+  private followGhost(x: number, y: number): void {
+    if (!this.selected || this.hud.isOverHud(y) || this.panel.visible || this.outcome !== "playing") {
+      this.hideGhost();
+      return;
+    }
+    const { col, row } = pointerToCell(x, y);
+    this.paintGhost(col, row);
+  }
+
+  private setPendingCell(col: number, row: number): void {
+    this.pendingCell = { col, row };
+    this.paintGhost(col, row);
+    if (this.canBuildAt(col, row) && this.selected && this.gold >= TOWERS[this.selected].cost) this.layoutConfirm(col, row);
+    else this.hideConfirm();
+  }
+
+  private paintGhost(col: number, row: number): void {
+    if (!this.selected || !isInBounds(col, row) || row >= MAP_ROWS) {
+      this.hideGhost();
+      return;
+    }
+    const def = TOWERS[this.selected];
+    const { x, y } = cellCenter(col, row);
+    const ok = this.canBuildAt(col, row) && this.gold >= def.cost;
+    applySprite(this.ghost, def.sprite, 32);
+    this.ghost.setPosition(x, y).setVisible(true).setAlpha(0.8);
+    this.ghostRange.clear();
+    this.ghostRange.lineStyle(2, ok ? Palette.valid : Palette.danger, 0.85);
+    this.ghostRange.fillStyle(ok ? Palette.valid : Palette.danger, 0.08);
+    this.ghostRange.fillCircle(x, y, def.stats.range);
+    this.ghostRange.strokeCircle(x, y, def.stats.range);
+  }
+
+  private hideGhost(): void {
+    this.ghost.setVisible(false);
+    this.ghostRange.clear();
+  }
+
+  private layoutConfirm(col: number, row: number): void {
+    const { x, y } = cellCenter(col, row);
+    const w = 168;
+    const h = BTN_H;
+    let bx = x + TILE_SIZE / 2 + 8;
+    let by = y - h / 2;
+    if (bx + w > GAME_WIDTH - 8) bx = x - TILE_SIZE / 2 - 8 - w;
+    if (bx < 8) bx = 8;
+    if (by < MENU_BTN_H + 8) by = MENU_BTN_H + 8;
+    if (by + h > MAP_ROWS * TILE_SIZE - 8) by = MAP_ROWS * TILE_SIZE - 8 - h;
+    this.confirmRect = { x: bx, y: by, w, h };
+    this.confirmBtn.root.setPosition(bx, by);
+    this.confirmBtn.setVisible(true);
+  }
+
+  private hideConfirm(): void {
+    this.confirmBtn.setVisible(false);
+  }
+
+  private confirmPending(): void {
+    if (!this.selected || !this.pendingCell) return;
+    if (this.tryBuild(this.pendingCell.col, this.pendingCell.row, this.selected)) this.afterPlace();
+  }
+
+  trySell(tower: PlacedTower): boolean {
+    if (this.outcome !== "playing") return false;
+    const refund = sellRefund(TOWERS[tower.id].cost);
+    const key = `${tower.col},${tower.row}`;
+    this.occupied.delete(key);
+    this.towers = this.towers.filter((t) => t !== tower);
+    tower.sprite.destroy();
+    tower.rangeGfx.destroy();
+    tower.badge.destroy();
+    this.gold += refund;
+    if (this.lastTower === tower) this.lastTower = null;
+    if (this.panel.openTower === tower) this.panel.hide();
+    this.showTowerRange(null);
+    this.hudDirty = true;
+    this.redrawGlow();
+    return true;
+  }
+
+  private showTowerRange(tower: PlacedTower | null): void {
+    for (let i = 0; i < this.towers.length; i++) {
+      const t = this.towers[i];
+      if (!t) continue;
+      if (tower && t === tower) {
+        this.syncRangeGfx(t);
+        t.rangeGfx.setVisible(true);
+      } else {
+        t.rangeGfx.setVisible(false);
+      }
+    }
+  }
+
+  private syncRangeGfx(tower: PlacedTower): void {
+    const range = tower.resolved.range || TOWERS[tower.id].stats.range;
+    tower.rangeGfx.clear();
+    tower.rangeGfx.lineStyle(2, Palette.goldBright, 0.6);
+    tower.rangeGfx.strokeCircle(tower.x, tower.y, range);
+  }
+
+    private hudArgs() {
     return {
       gold: this.gold,
       lives: this.lives,
@@ -763,9 +939,9 @@ export class GameScene extends Phaser.Scene {
       waveTotal: this.waves.totalWaves,
       waveActive: this.waves.active,
       selected: this.selected,
+      placing: this.selected !== null,
       outcome: this.outcome,
       canStart: this.waves.canStart(),
-      canInscribe: this.towers.length > 0 && this.outcome === "playing",
       depth: this.depth,
       difficulty: difficultyLabel(this.depth),
       pips: pipText(this.depth),
@@ -788,7 +964,7 @@ export class GameScene extends Phaser.Scene {
       lastVolleyCount: this.lastVolleyCount,
       fps: Math.round(this.fpsEma * 10) / 10,
       outcome: this.outcome,
-      selected: this.selected,
+      selected: this.selected ?? "",
       panelOpen: this.panel.visible,
       helpVisible: this.help.visible,
       layoutId: this.layout.id,
@@ -812,6 +988,7 @@ export class GameScene extends Phaser.Scene {
       scene: "game" as const,
       placeTower: (col: number, row: number, towerId?: string): boolean => {
         const id = towerId && isTowerId(towerId) ? towerId : this.selected;
+        if (!id) return false;
         return this.tryBuild(col, row, id);
       },
       startWave: (): boolean => this.tryStartWave(),
@@ -831,12 +1008,15 @@ export class GameScene extends Phaser.Scene {
       openPanel: (col: number, row: number): boolean => {
         const t = this.towerAt(col, row);
         if (!t) return false;
+        this.cancelBuild();
         this.lastTower = t;
         this.panel.show(t);
+        this.showTowerRange(t);
         return true;
       },
       closePanel: (): void => {
         this.panel.hide();
+        this.showTowerRange(null);
       },
       dismissHelp: (): void => {
         this.help.dismiss();
@@ -848,6 +1028,10 @@ export class GameScene extends Phaser.Scene {
         helpDismiss: this.help.dismissRect(),
         ...this.hud.rects(),
         panel: this.panel.visible ? this.panel.rects() : null,
+        cancelPlace: this.hud.rects().cancelPlace,
+        confirmPlace: this.confirmBtn.visible ? this.confirmRect : null,
+        placing: this.selected !== null,
+        pendingCell: this.pendingCell,
         battleHintOk: this.battleHint.visible ? this.battleHint.okRect : null,
         shopHelpOk: this.shopHint.visible ? this.shopHint.okRect : null,
         shop: this.shop.visible ? { offers: this.shop.offerBuyRects, close: this.shop.closeRect, panel: this.shop.panelRect } : null,

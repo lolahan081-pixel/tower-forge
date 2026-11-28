@@ -1,6 +1,6 @@
 # Next steps
 
-Shipped: main menu, progressive unlocks, sockets, Bastion loadouts, Relics and affixes, drops and spoils, the between-wave shop (with explanation), Forge currency, stash, Ember Atlas campaign with twelve unique path layouts, Ember Lattice, enemy rarity and pack mods, stage-1 pixel sprites (icons, tower idle/attack, enemy walk, hit flash, death puff, per-element impacts), data-driven Depth difficulty, and a win → Next → Atlas highlight flow.
+Shipped: main menu, progressive unlocks, sockets, Bastion loadouts, Relics and affixes, drops and spoils, the between-wave shop (with explanation), Forge currency, stash, Ember Atlas campaign with twelve unique path layouts, Ember Lattice, enemy rarity and pack mods, stage-1 pixel sprites (icons, tower idle/attack, enemy walk, hit flash, death puff, per-element impacts), data-driven Depth difficulty, a win → Next → Atlas highlight flow, and a clearer in-battle place / inspect / Sigil / sell flow.
 
 Deferred:
 
