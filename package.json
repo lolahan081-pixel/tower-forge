@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "atlas": "node scripts/build-atlas.mjs",
+    "build": "node scripts/build-atlas.mjs && tsc --noEmit && vite build",
     "preview": "vite preview --host 127.0.0.1 --port 4173",
     "test:headless": "node scripts/headless-loop.mjs",
     "test:sigils": "node scripts/headless-sigils.mjs"

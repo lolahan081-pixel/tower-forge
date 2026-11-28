@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import type { Enemy } from "./EnemyPool";
 import { findChainTarget, hasHitEnemy } from "./combat";
+import { applySprite } from "../game/sprites";
 
 const HIT_PAD = 4;
 const MAX_HITS = 8;
@@ -19,6 +20,7 @@ export class Projectile {
   chainLeft = 0;
   home = false;
   ownerIndex = -1;
+  texture = "cinder-orb";
   target: Enemy | null = null;
   sprite: Phaser.GameObjects.Image;
   readonly hits: (Enemy | null)[] = [null, null, null, null, null, null, null, null];
@@ -59,17 +61,17 @@ export class Projectile {
     this.chainLeft = chain;
     this.home = home;
     this.ownerIndex = ownerIndex;
+    this.texture = texture;
     this.target = target;
     this.hitCount = 0;
     this.hitEnemy = null;
     for (let i = 0; i < MAX_HITS; i++) this.hits[i] = null;
+    applySprite(this.sprite, texture, 16);
     this.sprite
-      .setTexture(texture)
       .setTint(tint)
       .setVisible(true)
       .setActive(true)
       .setPosition(x, y)
-      .setDisplaySize(18, 18)
       .setRotation(Math.atan2(vy, vx));
   }
 
@@ -212,8 +214,8 @@ export class Beam {
     const dx = x2 - x1;
     const dy = y2 - y1;
     const len = Math.hypot(dx, dy);
+    applySprite(this.sprite, texture);
     this.sprite
-      .setTexture(texture)
       .setTint(tint)
       .setVisible(true)
       .setActive(true)

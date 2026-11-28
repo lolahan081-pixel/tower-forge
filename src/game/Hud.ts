@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import { GAME_HEIGHT, GAME_WIDTH, HUD_HEIGHT, MAP_ROWS, TILE_SIZE, type GridPos } from "../data/map";
 import { TOWERS, TOWER_IDS, type TowerId } from "../data/towers";
 import { Palette } from "../palette";
+import { applySprite } from "./sprites";
 import { UiButton } from "./UiButton";
 import { BTN_H, FONT_BTN, FONT_BTN_SM, FONT_HUD, FONT_TITLE, type UiRect } from "./ui";
 
@@ -65,7 +66,8 @@ export class Hud {
         .setStrokeStyle(2, Palette.stoneLight)
         .setDepth(19)
         .setInteractive({ useHandCursor: true });
-      scene.add.image(x + 28, cy, id).setDepth(20);
+      const icon = scene.add.image(x + 28, cy, id).setDepth(20);
+      applySprite(icon, def.sprite, 32);
       scene.add.text(x + 50, cy - 20, def.name, { font: FONT_BTN, color: "#e8e0d4" }).setDepth(20);
       scene.add.text(x + 50, cy + 8, `${def.cost} gold`, { font: FONT_BTN_SM, color: "#c9a227" }).setDepth(20);
       const mark = scene.add

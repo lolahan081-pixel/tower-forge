@@ -3,7 +3,8 @@ import { GAME_HEIGHT, GAME_WIDTH, HUD_HEIGHT } from "../data/map";
 import { getProfile, persistProfile } from "../data/profile";
 import type { ShopOffer } from "../data/shop";
 import { Palette } from "../palette";
-import { gemColor, gemName } from "./gems";
+import { gemColor, gemIcon, gemName } from "./gems";
+import { addIcon, setIcon } from "./sprites";
 import { UiButton } from "./UiButton";
 import { FONT_BTN_SM, FONT_HUD, setTreeInput, type UiRect } from "./ui";
 
@@ -25,9 +26,10 @@ export class ShopOverlay {
   private readonly equippedText: Phaser.GameObjects.Text;
   private readonly closeBtn: UiButton;
   readonly closeRect: UiRect;
+  readonly panelRect: UiRect;
   private readonly offerRects: UiRect[] = [];
   private readonly offerLabels: Phaser.GameObjects.Text[] = [];
-  private readonly offerChips: Phaser.GameObjects.Rectangle[] = [];
+  private readonly offerChips: Phaser.GameObjects.Image[] = [];
   private readonly buyBtns: UiButton[] = [];
   private readonly offerRows: Phaser.GameObjects.Rectangle[] = [];
   private offers: ShopOffer[] = [];
@@ -41,9 +43,12 @@ export class ShopOverlay {
     private readonly onClose: () => void,
   ) {
     const cx = GAME_WIDTH / 2;
-    const cy = (GAME_HEIGHT - HUD_HEIGHT) / 2;
-    const panelH = 28 + 36 + 70 + 40 + 4 * (ROW_H + 6) + 88 + 20;
-    const top = cy - panelH / 2;
+    const menuClear = 104;
+    const hudTop = GAME_HEIGHT - HUD_HEIGHT;
+    const panelH = Math.min(560, hudTop - menuClear - 8);
+    const top = menuClear;
+    const cy = top + panelH / 2;
+    this.panelRect = { x: cx - PANEL_W / 2, y: top, w: PANEL_W, h: panelH };
     const children: Phaser.GameObjects.GameObject[] = [];
     children.push(
       scene.add.rectangle(cx, cy, PANEL_W, panelH, Palette.panel, 0.98).setStrokeStyle(2, Palette.goldDim),
@@ -51,10 +56,10 @@ export class ShopOverlay {
     children.push(
       scene.add.text(cx, top + 12, "Ashen Peddler", { font: FONT_HUD, color: "#e8c547" }).setOrigin(0.5, 0),
     );
-    this.goldText = scene.add.text(cx, top + 40, "", { font: FONT_BTN_SM, color: "#c9a227" }).setOrigin(0.5, 0);
+    this.goldText = scene.add.text(cx, top + 30, "", { font: FONT_BTN_SM, color: "#c9a227" }).setOrigin(0.5, 0);
     children.push(this.goldText);
     this.helpText = scene.add
-      .text(cx, top + 64, "", {
+      .text(cx, top + 50, "", {
         font: FONT_BTN_SM,
         color: "#e8e0d4",
         align: "center",
@@ -64,21 +69,21 @@ export class ShopOverlay {
       .setOrigin(0.5, 0);
     children.push(this.helpText);
     this.bagText = scene.add
-      .text(cx, top + 128, "", { font: FONT_BTN_SM, color: "#c9a227", align: "center", wordWrap: { width: PANEL_W - 48 } })
+      .text(cx, top + 106, "", { font: FONT_BTN_SM, color: "#c9a227", align: "center", wordWrap: { width: PANEL_W - 48 } })
       .setOrigin(0.5, 0);
     this.equippedText = scene.add
-      .text(cx, top + 150, "", { font: FONT_BTN_SM, color: "#c9a227", align: "center", wordWrap: { width: PANEL_W - 48 } })
+      .text(cx, top + 122, "", { font: FONT_BTN_SM, color: "#c9a227", align: "center", wordWrap: { width: PANEL_W - 48 } })
       .setOrigin(0.5, 0);
     children.push(this.bagText, this.equippedText);
 
-    const rowY0 = top + 176;
+    const rowY0 = top + 136;
     const rowW = PANEL_W - 48;
     const rowX = cx - rowW / 2;
     for (let i = 0; i < 4; i++) {
       const y = rowY0 + i * (ROW_H + 6);
       const box = scene.add.rectangle(rowX, y, rowW, ROW_H, 0x1a161c, 1).setStrokeStyle(2, Palette.stoneLight).setOrigin(0, 0);
-      const chip = scene.add.rectangle(rowX + 22, y + ROW_H / 2, 16, 16, Palette.muted, 1);
-      const label = scene.add.text(rowX + 40, y + ROW_H / 2, "", { font: FONT_BTN_SM, color: "#e8e0d4" }).setOrigin(0, 0.5);
+      const chip = addIcon(scene, rowX + 22, y + ROW_H / 2, "gem-chip", 16);
+      const label = scene.add.text(rowX + 44, y + ROW_H / 2, "", { font: FONT_BTN_SM, color: "#e8e0d4" }).setOrigin(0, 0.5);
       const buyX = rowX + rowW - 12 - BUY_W;
       const index = i;
       const buy = new UiButton(scene, {
@@ -208,7 +213,7 @@ export class ShopOverlay {
       chip.setVisible(true);
       buy.setVisible(true);
       row?.setVisible(true);
-      chip.setFillStyle(gemColor(offer.gem), 1);
+      setIcon(chip, gemIcon(offer.gem), gemColor(offer.gem), 16);
       const kind = offer.gem.kind === "sigil" ? "Sigil" : "Rune";
       label.setText(`${gemName(offer.gem)}  ·  ${kind} L1`);
       if (offer.sold) {

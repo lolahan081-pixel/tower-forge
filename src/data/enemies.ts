@@ -10,6 +10,9 @@ export type EnemyDef = {
   radius: number;
   color: number;
   accent: number;
+  sprite: string;
+  walkAnim: string;
+  display: number;
 };
 
 export const ENEMIES: Record<EnemyId, EnemyDef> = {
@@ -22,6 +25,9 @@ export const ENEMIES: Record<EnemyId, EnemyDef> = {
     radius: 10,
     color: 0x2a1618,
     accent: 0xa82820,
+    sprite: "wretch",
+    walkAnim: "wretch-walk",
+    display: 24,
   },
   brute: {
     id: "brute",
@@ -32,6 +38,9 @@ export const ENEMIES: Record<EnemyId, EnemyDef> = {
     radius: 16,
     color: 0x1c1a1e,
     accent: 0x6a2428,
+    sprite: "brute",
+    walkAnim: "brute-walk",
+    display: 32,
   },
   "hollow-sovereign": {
     id: "hollow-sovereign",
@@ -42,6 +51,9 @@ export const ENEMIES: Record<EnemyId, EnemyDef> = {
     radius: 22,
     color: 0x141018,
     accent: 0xe8c547,
+    sprite: "hollow-sovereign",
+    walkAnim: "hollow-sovereign-walk",
+    display: 48,
   },
 };
 

@@ -1,6 +1,6 @@
 # Tower Forge — The Ashen Bastion
 
-The last fortress that still guards a gate against the Hollow mist. Dark fantasy palette: near-black charcoal ground, a dim stone path, ember, blood-red, and gold. Simple shapes only; no external art.
+The last fortress that still guards a gate against the Hollow mist. Dark fantasy palette: near-black charcoal ground, a dim stone path, ember, blood-red, frost cyan, and gold.
 
 ## Pillars
 
@@ -10,7 +10,8 @@ The last fortress that still guards a gate against the Hollow mist. Dark fantasy
 - **Data-first.** Towers, Sigils, Runes, Relics, affixes, currency, drops, Depths, Atlas nodes, map layouts, Lattice nodes, unlocks, enemies, and enemy mods live in typed data files and are looked up by id.
 - **Modifiable stats.** Combat is a `ResolvedAttack` from `resolveLoadout(frame, sigil, runes, relics, extra)`: damage, rate, range, projectiles, chain, pierce, conversion, and gold. Relics and Lattice nodes fold in here, scoped by tags where needed.
 - **Permanent ARPG account.** Items, gems, and currency are serializable records with a `uid`, saved in `localStorage`.
-- **Cheap to simulate.** Pooled enemies and projectiles. No per-frame allocations in the hot loop.
+- **Cheap to simulate.** Pooled enemies, projectiles, and short FX. No per-frame allocations in the hot loop.
+- **Pixel art, staged.** Stage 1 uses one original 16-color-or-less spritesheet (`public/atlas.png`, built by `scripts/build-atlas.mjs` from typed pixel grids — no downloaded art). Icons are 16×16; frames ~32px; the Hollow Sovereign is 48px. The game runs with `pixelArt: true` (nearest-neighbor). Sprite keys come from data (`icon` / `sprite` / anim fields); baked shape textures remain as fallbacks if a frame is missing.
 
 ## Core loop
 

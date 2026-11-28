@@ -1,3 +1,4 @@
+import type Phaser from "phaser";
 import type { GemInstance } from "../data/items";
 import type { ResolvedAttack } from "../data/stats";
 import type { TowerId } from "../data/towers";
@@ -11,7 +12,7 @@ export type PlacedTower = {
   sockets: (GemInstance | null)[];
   resolved: ResolvedAttack;
   cooldown: number;
-  sprite: Phaser.GameObjects.Image;
+  sprite: Phaser.GameObjects.Sprite;
   rangeGfx: Phaser.GameObjects.Graphics;
   badge: Phaser.GameObjects.Image;
 };

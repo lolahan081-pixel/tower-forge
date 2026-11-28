@@ -6,7 +6,8 @@ import { isSigilId, SIGILS } from "../data/sigils";
 import { runeMatchesSigil } from "../data/stats";
 import { TOWERS } from "../data/towers";
 import { Palette } from "../palette";
-import { gemColor, gemName } from "./gems";
+import { gemColor, gemIcon, gemName } from "./gems";
+import { addIcon, setIcon } from "./sprites";
 import type { PlacedTower } from "./towerState";
 import { BTN_H, containsRect, FONT_BODY, FONT_BTN, FONT_BTN_SM, FONT_HUD, type UiRect } from "./ui";
 
@@ -25,7 +26,7 @@ type Handlers = {
 
 type SlotView = {
   box: Phaser.GameObjects.Rectangle;
-  chip: Phaser.GameObjects.Rectangle;
+  chip: Phaser.GameObjects.Image;
   label: Phaser.GameObjects.Text;
   rect: UiRect;
 };
@@ -156,7 +157,7 @@ export class SigilPanel {
       .setStrokeStyle(2, Palette.stoneLight)
       .setOrigin(0, 0)
       .setInteractive({ useHandCursor: true });
-    const chip = scene.add.rectangle(x + 18, y + h / 2, 16, 16, Palette.muted, 1).setVisible(false);
+    const chip = addIcon(scene, x + 18, y + h / 2, "gem-chip", 16).setVisible(false);
     const label = scene.add.text(x + 34, y + h / 2 - 16, "", {
       font: FONT_BTN_SM,
       color: "#e8e0d4",
@@ -269,7 +270,8 @@ export class SigilPanel {
       }
       const tags = isRuneId(gem.defId) ? RUNES[gem.defId].tags : [];
       const ok = sigil !== null && runeMatchesSigil(sigilTags, tags);
-      view.chip.setVisible(true).setFillStyle(gemColor(gem), 1);
+      view.chip.setVisible(true);
+      setIcon(view.chip, gemIcon(gem), gemColor(gem), 16);
       view.label
         .setVisible(true)
         .setColor(ok ? "#e8e0d4" : "#8a8490")
@@ -314,7 +316,8 @@ export class SigilPanel {
       view.label.setVisible(true).setColor("#8a8490").setText(empty);
       return;
     }
-    view.chip.setVisible(true).setFillStyle(gemColor(gem), 1);
+    view.chip.setVisible(true);
+    setIcon(view.chip, gemIcon(gem), gemColor(gem), 16);
     const kind = gem.kind === "sigil" ? "Sigil" : "Rune";
     view.label
       .setVisible(true)

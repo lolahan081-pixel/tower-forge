@@ -17,6 +17,9 @@ export type TowerDef = {
   starterSigil: SigilId;
   color: number;
   accent: number;
+  sprite: string;
+  idleAnim: string;
+  attackAnim: string;
 };
 
 export const TOWERS: Record<TowerId, TowerDef> = {
@@ -30,6 +33,9 @@ export const TOWERS: Record<TowerId, TowerDef> = {
     starterSigil: "cinder-orb",
     color: 0x2a2420,
     accent: 0xc4451c,
+    sprite: "ember-spire",
+    idleAnim: "ember-spire-idle",
+    attackAnim: "ember-spire-attack",
   },
   "blood-font": {
     id: "blood-font",
@@ -41,6 +47,9 @@ export const TOWERS: Record<TowerId, TowerDef> = {
     starterSigil: "crimson-spike",
     color: 0x1c1214,
     accent: 0x8b1a1a,
+    sprite: "blood-font",
+    idleAnim: "blood-font-idle",
+    attackAnim: "blood-font-attack",
   },
 };
 

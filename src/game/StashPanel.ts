@@ -4,12 +4,13 @@ import { GAME_HEIGHT, GAME_WIDTH } from "../data/map";
 import { getProfile } from "../data/profile";
 import { relicDisplayName, relicRarityLabel } from "../data/relics";
 import { Palette } from "../palette";
-import { gemColor, gemName, itemColor } from "./gems";
+import { gemColor, gemIcon, gemName, itemColor, itemIcon } from "./gems";
+import { addIcon, setIcon } from "./sprites";
 import { BTN_H, containsRect, FONT_BTN, FONT_BTN_SM, FONT_HUD, type UiRect } from "./ui";
 
 const TOP = 16 + BTN_H + 16 + BTN_H + 20;
 type Filter = "all" | "gems" | "relics" | "currency";
-type Slot = { box: Phaser.GameObjects.Rectangle; chip: Phaser.GameObjects.Rectangle; label: Phaser.GameObjects.Text; rect: UiRect };
+type Slot = { box: Phaser.GameObjects.Rectangle; chip: Phaser.GameObjects.Image; label: Phaser.GameObjects.Text; rect: UiRect };
 
 export class StashPanel {
   readonly root: Phaser.GameObjects.Container;
@@ -56,7 +57,7 @@ export class StashPanel {
       const rx = 44 + col * 450;
       const ry = rowY + row * 68;
       const box = scene.add.rectangle(rx, ry, 430, 60, 0x1a161c, 1).setStrokeStyle(2, Palette.stoneLight).setOrigin(0, 0);
-      const chip = scene.add.rectangle(rx + 18, ry + 30, 14, 14, Palette.muted, 1);
+      const chip = addIcon(scene, rx + 18, ry + 30, "gem-chip", 16);
       const label = scene.add.text(rx + 36, ry + 30, "", { font: FONT_BTN_SM, color: "#e8e0d4" }).setOrigin(0, 0.5);
       children.push(box, chip, label);
       this.rows.push({ box, chip, label, rect: { x: rx, y: ry, w: 430, h: 60 } });
@@ -109,26 +110,27 @@ export class StashPanel {
         continue;
       }
       view.box.setVisible(true);
-      view.chip.setVisible(true).setFillStyle(item.color, 1);
+      view.chip.setVisible(true);
+      setIcon(view.chip, item.icon, item.color, 16);
       view.label.setVisible(true).setText(item.label);
     }
   }
 
-  private items(): { label: string; color: number }[] {
+  private items(): { label: string; color: number; icon: string }[] {
     const p = getProfile();
-    const out: { label: string; color: number }[] = [];
+    const out: { label: string; color: number; icon: string }[] = [];
     if (this.filter === "all" || this.filter === "gems") {
-      for (const g of p.sigilInventory) out.push({ label: `${gemName(g)}  ·  Sigil L${g.level}`, color: gemColor(g) });
-      for (const g of p.runeInventory) out.push({ label: `${gemName(g)}  ·  Rune L${g.level}`, color: gemColor(g) });
+      for (const g of p.sigilInventory) out.push({ label: `${gemName(g)}  ·  Sigil L${g.level}`, color: gemColor(g), icon: gemIcon(g) });
+      for (const g of p.runeInventory) out.push({ label: `${gemName(g)}  ·  Rune L${g.level}`, color: gemColor(g), icon: gemIcon(g) });
     }
     if (this.filter === "all" || this.filter === "relics") {
-      for (const r of p.relicInventory) out.push({ label: `${relicDisplayName(r)}  ·  ${relicRarityLabel(r.rarity)}`, color: itemColor(r) });
+      for (const r of p.relicInventory) out.push({ label: `${relicDisplayName(r)}  ·  ${relicRarityLabel(r.rarity)}`, color: itemColor(r), icon: itemIcon(r) });
     }
     if (this.filter === "all" || this.filter === "currency") {
       for (const id of CURRENCY_IDS) {
         const qty = p.currency[id] ?? 0;
         if (qty <= 0) continue;
-        out.push({ label: `${CURRENCIES[id].name}  ×${qty}`, color: CURRENCIES[id].color });
+        out.push({ label: `${CURRENCIES[id].name}  ×${qty}`, color: CURRENCIES[id].color, icon: CURRENCIES[id].icon });
       }
     }
     return out;

@@ -5,7 +5,8 @@ import { GAME_HEIGHT, GAME_WIDTH, HUD_HEIGHT } from "../data/map";
 import { relicDisplayName } from "../data/relics";
 import { Palette } from "../palette";
 import { collectSpoils } from "../data/profile";
-import { gemName } from "./gems";
+import { gemName, spoilsIcon } from "./gems";
+import { addIcon, setIcon } from "./sprites";
 import { BTN_H, containsRect, FONT_BODY, FONT_BTN, FONT_HUD, type UiRect } from "./ui";
 
 function labelOf(item: SpoilsItem): string {
@@ -20,6 +21,7 @@ export class SpoilsOverlay {
   private readonly list: Phaser.GameObjects.Text;
   private readonly takeBtn: Phaser.GameObjects.Rectangle;
   private readonly takeLabel: Phaser.GameObjects.Text;
+  private readonly icons: Phaser.GameObjects.Image[] = [];
   readonly takeRect: UiRect;
   private items: SpoilsItem[] = [];
 
@@ -36,8 +38,13 @@ export class SpoilsOverlay {
       .text(cx, cy - h / 2 + 20, "Spoils of the Breach", { font: FONT_HUD, color: "#e8c547" })
       .setOrigin(0.5, 0);
     children.push(this.title);
+    for (let i = 0; i < 8; i++) {
+      const icon = addIcon(scene, cx, cy - h / 2 + 56, "gem-chip", 16).setVisible(false);
+      this.icons.push(icon);
+      children.push(icon);
+    }
     this.list = scene.add
-      .text(cx, cy - h / 2 + 64, "", {
+      .text(cx, cy - h / 2 + 80, "", {
         font: FONT_BODY,
         color: "#e8e0d4",
         align: "center",
@@ -78,11 +85,28 @@ export class SpoilsOverlay {
     const lines = this.items.slice(0, 8).map((it) => labelOf(it));
     if (this.items.length > 8) lines.push(`+${this.items.length - 8} more`);
     this.list.setText(lines.join("\n"));
+    const cx = GAME_WIDTH / 2;
+    const cy = (GAME_HEIGHT - HUD_HEIGHT) / 2 - 20;
+    const iconY = cy - 360 / 2 + 56;
+    const shown = this.items.slice(0, 8);
+    const origin = cx - ((Math.max(1, shown.length) - 1) * 22) / 2;
+    for (let i = 0; i < this.icons.length; i++) {
+      const icon = this.icons[i];
+      const item = shown[i];
+      if (!icon) continue;
+      if (!item) {
+        icon.setVisible(false);
+        continue;
+      }
+      icon.setVisible(true).setPosition(origin + i * 22, iconY);
+      setIcon(icon, spoilsIcon(item), undefined, 16);
+    }
     this.root.setVisible(true);
   }
 
   hide(): void {
     this.root.setVisible(false);
+    for (const icon of this.icons) icon.setVisible(false);
   }
 
   handleTap(x: number, y: number): boolean {

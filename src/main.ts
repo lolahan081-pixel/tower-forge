@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { GAME_HEIGHT, GAME_WIDTH } from "./data/map";
+import { BootScene } from "./game/BootScene";
 import { BastionScene } from "./game/BastionScene";
 import { GameScene } from "./game/GameScene";
 import { MenuScene } from "./game/MenuScene";
@@ -13,14 +14,14 @@ const config: Phaser.Types.Core.GameConfig = {
   width: GAME_WIDTH,
   height: GAME_HEIGHT,
   backgroundColor: "#0b0a0c",
-  scene: [MenuScene, BastionScene, GameScene],
+  scene: [BootScene, MenuScene, BastionScene, GameScene],
   banner: false,
   audio: { noAudio: true },
   render: {
-    antialias: true,
+    antialias: false,
     powerPreference: "high-performance",
     roundPixels: true,
-    pixelArt: false,
+    pixelArt: true,
   },
   scale: {
     mode: Phaser.Scale.FIT,

@@ -13,6 +13,7 @@ import { GAME_HEIGHT, GAME_WIDTH } from "../data/map";
 import { getMapLayout } from "../data/maps";
 import { getProfile } from "../data/profile";
 import { Palette } from "../palette";
+import { applySprite } from "./sprites";
 import { drawPathPreview } from "./drawMap";
 import { UiButton } from "./UiButton";
 import { BTN_H, FONT_BODY, FONT_BTN_SM, FONT_TITLE, setTreeInput, type UiRect } from "./ui";
@@ -86,6 +87,7 @@ export class AtlasPanel {
         .text(def.x, def.y, String(def.depth), { font: FONT_TITLE, color: "#e8e0d4" })
         .setOrigin(0.5);
       const lock = scene.add.image(def.x, def.y, "ui-lock").setVisible(false);
+      applySprite(lock, "ui-lock", 24);
       const caption = scene.add
         .text(def.x, def.y + 40, def.name, {
           font: FONT_BTN_SM,

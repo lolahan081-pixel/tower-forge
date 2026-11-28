@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { Palette } from "../palette";
 
-/** Bake simple shape textures once so hundreds of enemies can be cheap sprites. */
+/** Bake simple shape textures as fallbacks when the pixel atlas is missing a frame. */
 export function generateTextures(scene: Phaser.Scene): void {
   const g = scene.make.graphics({ x: 0, y: 0 }, false);
 

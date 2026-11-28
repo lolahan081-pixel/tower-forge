@@ -7,6 +7,7 @@ import {
   type EnemyRarity,
 } from "../data/enemyMods";
 import { Palette } from "../palette";
+import { applySprite, playSpriteAnim } from "../game/sprites";
 import { type PathRoute, type PathSample } from "./path";
 
 export class Enemy {
@@ -37,14 +38,15 @@ export class Enemy {
   wardMult = 1;
   auraSpeed = 1;
   wardTaken = 1;
-  sprite: Phaser.GameObjects.Image;
+  flashLeft = 0;
+  sprite: Phaser.GameObjects.Sprite;
   outline: Phaser.GameObjects.Arc;
   hpBg: Phaser.GameObjects.Rectangle;
   hpFill: Phaser.GameObjects.Rectangle;
   shieldFill: Phaser.GameObjects.Rectangle;
 
   constructor(scene: Phaser.Scene) {
-    this.sprite = scene.add.image(0, 0, "wretch").setVisible(false).setDepth(5);
+    this.sprite = scene.add.sprite(0, 0, "wretch").setVisible(false).setDepth(5);
     this.outline = scene.add.circle(0, 0, 12, 0, 0).setStrokeStyle(2, Palette.gold).setVisible(false).setDepth(4);
     this.hpBg = scene.add.rectangle(0, 0, 20, 3, 0x1a1212, 1).setVisible(false).setDepth(6);
     this.hpFill = scene.add.rectangle(0, 0, 20, 3, 0x6e1a1a, 1).setVisible(false).setDepth(7);
@@ -97,10 +99,11 @@ export class Enemy {
     this.wardMult = resolved.wardMult;
     this.auraSpeed = 1;
     this.wardTaken = 1;
-    this.sprite.setTexture(def.id).setVisible(true).setActive(true).clearTint();
-    if (this.rarity === "magic") this.sprite.setTint(0xa8c8e0);
-    else if (this.rarity === "rare") this.sprite.setTint(0xffc080);
-    else if (this.rarity === "unique") this.sprite.setTint(0xffe08a);
+    this.flashLeft = 0;
+    applySprite(this.sprite, def.sprite, def.display);
+    this.sprite.setVisible(true).setActive(true);
+    this.applyRarityTint();
+    playSpriteAnim(this.sprite, def.walkAnim, false);
     this.hpBg.setVisible(true);
     this.hpFill.setVisible(true);
     this.path?.sample(this.dist, scratchSample);
@@ -126,6 +129,10 @@ export class Enemy {
     }
     this.path?.sample(this.dist, scratchSample);
     this.applySample(scratchSample);
+    if (this.flashLeft > 0) {
+      this.flashLeft -= dtSec;
+      if (this.flashLeft <= 0) this.applyRarityTint();
+    }
     this.syncBars();
     this.syncOutline();
     return scratchSample.atEnd;
@@ -146,6 +153,8 @@ export class Enemy {
       taken -= absorb;
     }
     this.hp -= taken;
+    this.flashLeft = 0.08;
+    this.sprite.setTintFill(0xffffff);
     this.syncBars();
     return this.hp <= 0;
   }
@@ -156,11 +165,20 @@ export class Enemy {
     this.mods.length = 0;
     this.splitOnDeath = false;
     this.path = null;
+    this.flashLeft = 0;
+    this.sprite.anims.stop();
     this.sprite.setVisible(false).setActive(false).clearTint();
     this.outline.setVisible(false);
     this.hpBg.setVisible(false);
     this.hpFill.setVisible(false);
     this.shieldFill.setVisible(false);
+  }
+
+  private applyRarityTint(): void {
+    this.sprite.clearTint();
+    if (this.rarity === "magic") this.sprite.setTint(0xa8c8e0);
+    else if (this.rarity === "rare") this.sprite.setTint(0xffc080);
+    else if (this.rarity === "unique") this.sprite.setTint(0xffe08a);
   }
 
   private applySample(sample: PathSample): void {

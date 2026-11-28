@@ -5,13 +5,14 @@ import { GAME_HEIGHT, GAME_WIDTH } from "../data/map";
 import { getProfile } from "../data/profile";
 import { relicDisplayName, relicRarityLabel, type RelicInstance } from "../data/relics";
 import { Palette } from "../palette";
-import { itemColor } from "./gems";
+import { itemColor, itemIcon } from "./gems";
+import { addIcon, setIcon } from "./sprites";
 import { BTN_H, containsRect, FONT_BODY, FONT_BTN, FONT_BTN_SM, FONT_HUD, type UiRect } from "./ui";
 
 const TOP = 16 + BTN_H + 16 + BTN_H + 20;
 const LIST = 6;
 
-type Slot = { box: Phaser.GameObjects.Rectangle; chip: Phaser.GameObjects.Rectangle; label: Phaser.GameObjects.Text; rect: UiRect };
+type Slot = { box: Phaser.GameObjects.Rectangle; chip: Phaser.GameObjects.Image; label: Phaser.GameObjects.Text; rect: UiRect };
 
 export class ForgePanel {
   readonly root: Phaser.GameObjects.Container;
@@ -72,7 +73,7 @@ export class ForgePanel {
 
   private makeSlot(scene: Phaser.Scene, children: Phaser.GameObjects.GameObject[], x: number, y: number, w: number, h: number): Slot {
     const box = scene.add.rectangle(x, y, w, h, 0x1a161c, 1).setStrokeStyle(2, Palette.stoneLight).setOrigin(0, 0);
-    const chip = scene.add.rectangle(x + 16, y + h / 2, 14, 14, Palette.muted, 1);
+    const chip = addIcon(scene, x + 16, y + h / 2, "gem-chip", 16);
     const label = scene.add.text(x + 30, y + h / 2, "", { font: FONT_BTN_SM, color: "#e8e0d4", wordWrap: { width: w - 40 } }).setOrigin(0, 0.5);
     children.push(box, chip, label);
     return { box, chip, label, rect: { x, y, w, h } };
@@ -125,7 +126,8 @@ export class ForgePanel {
       }
       const on = relic.uid === this.relicUid;
       view.box.setVisible(true).setStrokeStyle(on ? 3 : 2, on ? Palette.gold : Palette.stoneLight);
-      view.chip.setVisible(true).setFillStyle(itemColor(relic), 1);
+      view.chip.setVisible(true);
+      setIcon(view.chip, itemIcon(relic), itemColor(relic), 16);
       view.label.setVisible(true).setText(`${relicDisplayName(relic)}\n${relicRarityLabel(relic.rarity)}${relic.corrupted ? "  locked" : ""}`);
     }
     for (let i = 0; i < this.currViews.length; i++) {
@@ -136,7 +138,8 @@ export class ForgePanel {
       const qty = profile.currency[id] ?? 0;
       const on = this.currencyId === id;
       view.box.setVisible(true).setStrokeStyle(on ? 3 : 2, on ? Palette.gold : Palette.stoneLight);
-      view.chip.setVisible(true).setFillStyle(def.color, 1);
+      view.chip.setVisible(true);
+      setIcon(view.chip, def.icon, def.color, 16);
       view.label.setVisible(true).setColor(qty > 0 ? "#e8e0d4" : "#8a8490").setText(`${def.name}  ×${qty}`);
     }
     const relic = relics.find((r) => r.uid === this.relicUid) ?? null;

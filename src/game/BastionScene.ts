@@ -30,13 +30,14 @@ import { UnlockPopup } from "./UnlockPopup";
 import { UiButton } from "./UiButton";
 import { LatticePanel } from "./LatticePanel";
 import { StashPanel } from "./StashPanel";
-import { gemColor, gemName, itemColor } from "./gems";
+import { gemColor, gemIcon, gemName, itemColor, itemIcon } from "./gems";
+import { addIcon, applySprite, setIcon } from "./sprites";
 import { generateTextures } from "./textures";
 import { BTN_H, containsRect, FONT_BODY, FONT_BTN, FONT_BTN_SM, FONT_HUD, FONT_TITLE, pointerWorld, prepareSceneInput, startScene, type UiRect } from "./ui";
 
 type Tab = "loadout" | "stash" | "forge" | "lattice";
 
-type SlotView = { box: Phaser.GameObjects.Rectangle; chip: Phaser.GameObjects.Rectangle; label: Phaser.GameObjects.Text; rect: UiRect };
+type SlotView = { box: Phaser.GameObjects.Rectangle; chip: Phaser.GameObjects.Image; label: Phaser.GameObjects.Text; rect: UiRect };
 type InvView = SlotView;
 
 export class BastionScene extends Phaser.Scene {
@@ -217,6 +218,7 @@ export class BastionScene extends Phaser.Scene {
 
   private makeTabLock(rect: UiRect): { icon: Phaser.GameObjects.Image; caption: Phaser.GameObjects.Text } {
     const icon = this.add.image(rect.x + 22, rect.y + 28, "ui-lock").setDepth(7).setVisible(false);
+    applySprite(icon, "ui-lock", 24);
     const caption = this.add
       .text(rect.x + rect.w / 2, rect.y + rect.h - 18, "", { font: FONT_BTN_SM, color: "#8a8490" })
       .setOrigin(0.5, 0.5)
@@ -276,6 +278,7 @@ export class BastionScene extends Phaser.Scene {
         .setStrokeStyle(2, Palette.stoneLight)
         .setInteractive({ useHandCursor: true });
       const icon = this.add.image(rect.x + 28, rect.y + BTN_H / 2, id);
+      applySprite(icon, def.sprite, 32);
       const name = this.add.text(rect.x + 52, rect.y + 18, def.name, { font: FONT_BTN, color: "#e8e0d4" });
       const sub = this.add.text(rect.x + 52, rect.y + 48, `${runeSlotCount(id)} rune sockets`, {
         font: FONT_BTN_SM,
@@ -416,7 +419,7 @@ export class BastionScene extends Phaser.Scene {
       .setStrokeStyle(2, Palette.stoneLight)
       .setOrigin(0, 0)
       .setInteractive({ useHandCursor: true });
-    const chip = this.add.rectangle(x + 18, y + h / 2, 16, 16, Palette.muted, 1).setVisible(false);
+    const chip = addIcon(this, x + 18, y + h / 2, "gem-chip", 16).setVisible(false);
     const label = this.add.text(x + 34, y + h / 2 - 16, "", {
       font: FONT_BTN_SM,
       color: "#e8e0d4",
@@ -655,7 +658,8 @@ export class BastionScene extends Phaser.Scene {
       }
       const tags = isRuneId(gem.defId) ? RUNES[gem.defId].tags : [];
       const ok = runeMatchesSigil(sigilTags, tags);
-      view.chip.setVisible(true).setFillStyle(gemColor(gem), 1);
+      view.chip.setVisible(true);
+      setIcon(view.chip, gemIcon(gem), gemColor(gem), 16);
       view.label
         .setVisible(true)
         .setColor(ok ? "#e8e0d4" : "#8a8490")
@@ -679,7 +683,8 @@ export class BastionScene extends Phaser.Scene {
         view.label.setVisible(true).setColor("#8a8490").setText("Empty relic slot");
         continue;
       }
-      view.chip.setVisible(true).setFillStyle(itemColor(relic), 1);
+      view.chip.setVisible(true);
+      setIcon(view.chip, itemIcon(relic), itemColor(relic), 16);
       view.label
         .setVisible(true)
         .setColor("#e8e0d4")
@@ -719,7 +724,8 @@ export class BastionScene extends Phaser.Scene {
         }
         const selected = this.selectedUid === gem.uid;
         view.box.setVisible(true).setStrokeStyle(selected ? 3 : 2, selected ? Palette.gold : Palette.stoneLight);
-        view.chip.setVisible(true).setFillStyle(gemColor(gem), 1);
+        view.chip.setVisible(true);
+      setIcon(view.chip, gemIcon(gem), gemColor(gem), 16);
         view.label.setVisible(true).setColor("#e8e0d4").setText(`${gemName(gem)}\nRune  L${gem.level}  ${gem.xp} xp`);
       }
       this.hint.setText(this.selectedUid && this.selectedKind === "rune" ? "Tap a socket to link this rune" : "Tap a rune, then a socket");
@@ -737,7 +743,8 @@ export class BastionScene extends Phaser.Scene {
         }
         const selected = this.selectedUid === relic.uid;
         view.box.setVisible(true).setStrokeStyle(selected ? 3 : 2, selected ? Palette.gold : Palette.stoneLight);
-        view.chip.setVisible(true).setFillStyle(itemColor(relic), 1);
+        view.chip.setVisible(true);
+      setIcon(view.chip, itemIcon(relic), itemColor(relic), 16);
         view.label.setVisible(true).setColor("#e8e0d4").setText(`${relicDisplayName(relic)}\n${relicRarityLabel(relic.rarity)}`);
       }
       this.hint.setText(
@@ -862,6 +869,14 @@ export class BastionScene extends Phaser.Scene {
         persistProfile();
         this.refresh();
         return relic;
+      },
+      giveRune: (id?: string) => {
+        const defId = id && isRuneId(id) ? id : "split-volley";
+        const rune = makeGem("rune", defId);
+        getProfile().runeInventory.push(rune);
+        persistProfile();
+        this.refresh();
+        return rune;
       },
       giveCurrency: (id: string, qty = 1) => {
         const profile = getProfile();

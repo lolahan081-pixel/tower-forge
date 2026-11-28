@@ -19,6 +19,7 @@ export type RuneDef = {
   tags: readonly GemTag[];
   modifiers: RuneModifiers;
   color: number;
+  icon: string;
 };
 
 const NONE: RuneModifiers = {
@@ -37,6 +38,7 @@ export const RUNES: Record<RuneId, RuneDef> = {
     tags: ["projectile"],
     modifiers: { ...NONE, addProjectiles: 2, damageMult: 0.75 },
     color: 0xc9a227,
+    icon: "split-volley",
   },
   "linked-arc": {
     id: "linked-arc",
@@ -44,6 +46,7 @@ export const RUNES: Record<RuneId, RuneDef> = {
     tags: ["projectile"],
     modifiers: { ...NONE, addChain: 2 },
     color: 0xc8b44a,
+    icon: "linked-arc",
   },
   "through-flesh": {
     id: "through-flesh",
@@ -51,6 +54,7 @@ export const RUNES: Record<RuneId, RuneDef> = {
     tags: ["projectile"],
     modifiers: { ...NONE, addPierce: 2 },
     color: 0x8a8490,
+    icon: "through-flesh",
   },
   "rime-touch": {
     id: "rime-touch",
@@ -58,6 +62,7 @@ export const RUNES: Record<RuneId, RuneDef> = {
     tags: [],
     modifiers: { ...NONE, convertToCold: 0.4 },
     color: 0x6a9bb8,
+    icon: "rime-touch",
   },
   quickening: {
     id: "quickening",
@@ -65,6 +70,7 @@ export const RUNES: Record<RuneId, RuneDef> = {
     tags: [],
     modifiers: { ...NONE, attackRateMult: 1.3 },
     color: 0xe8c547,
+    icon: "quickening",
   },
 };
 

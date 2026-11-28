@@ -29,6 +29,8 @@ import { Palette } from "../palette";
 import { collectInRadius, findChainTarget, findNearestToExit } from "../sim/combat";
 import { EnemyPool, tickEnemyAuras, type Enemy } from "../sim/EnemyPool";
 import { routesForPaths, type PathRoute } from "../sim/path";
+import { impactAnimFor } from "../data/sprites";
+import { FxPool } from "../sim/FxPool";
 import { BeamPool, NovaPool, ProjectilePool } from "../sim/ProjectilePool";
 import { WaveController } from "../sim/WaveController";
 import type { GameSnapshot, GemSnap } from "../debug";
@@ -42,6 +44,7 @@ import { SigilPanel } from "./SigilPanel";
 import { SpoilsOverlay } from "./SpoilsOverlay";
 import { drawBoard } from "./drawMap";
 import { gemName } from "./gems";
+import { applySprite, hookAttackIdle, playSpriteAnim } from "./sprites";
 import { generateTextures } from "./textures";
 import type { PlacedTower } from "./towerState";
 import { pointerWorld, prepareSceneInput, startScene } from "./ui";
@@ -59,6 +62,7 @@ export class GameScene extends Phaser.Scene {
   private projectiles!: ProjectilePool;
   private beams!: BeamPool;
   private novas!: NovaPool;
+  private fx!: FxPool;
   private waves = new WaveController();
   private hud!: Hud;
   private panel!: SigilPanel;
@@ -114,6 +118,7 @@ export class GameScene extends Phaser.Scene {
     this.projectiles = new ProjectilePool(this, 96);
     this.beams = new BeamPool(this, 24);
     this.novas = new NovaPool(this, 8);
+    this.fx = new FxPool(this, applySprite, 24);
 
     this.hover = this.add
       .rectangle(0, 0, TILE_SIZE - 2, TILE_SIZE - 2)
@@ -301,6 +306,7 @@ export class GameScene extends Phaser.Scene {
       this.stepProjectiles(dtSec);
       this.beams.step(dtSec);
       this.novas.step(dtSec);
+      this.fx.step(dtSec);
       if (this.waves.endIfClear(this.enemies.livingCount)) {
         this.hudDirty = true;
         if (!this.waves.hasMoreWaves) this.setOutcome("won");
@@ -309,6 +315,7 @@ export class GameScene extends Phaser.Scene {
     } else {
       this.beams.step(dtSec);
       this.novas.step(dtSec);
+      this.fx.step(dtSec);
     }
 
     const pulse = 0.55 + 0.45 * Math.sin(time / 180);
@@ -334,11 +341,15 @@ export class GameScene extends Phaser.Scene {
     const { x, y } = cellCenter(col, row);
     const runes = getProfile().loadouts[towerId]?.runes ?? [];
     const sockets: (GemInstance | null)[] = [makeGem("sigil", def.starterSigil), ...runes];
-    const sprite = this.add.image(x, y, def.id).setDepth(4);
+    const sprite = this.add.sprite(x, y, def.id).setDepth(4);
+    applySprite(sprite, def.sprite, 32);
+    hookAttackIdle(sprite);
+    playSpriteAnim(sprite, def.idleAnim, false);
     const rangeGfx = this.add.graphics().setDepth(2).setVisible(false);
     rangeGfx.lineStyle(1, def.accent, 0.35);
     rangeGfx.strokeCircle(x, y, def.stats.range);
     const badge = this.add.image(x, y - 28, "no-sigil").setDepth(9).setVisible(false);
+    applySprite(badge, "no-sigil", 24);
 
     const tower: PlacedTower = {
       col,
@@ -531,6 +542,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private fire(index: number, tower: PlacedTower, resolved: ResolvedAttack, target: Enemy, enemies: Enemy[]): void {
+    playSpriteAnim(tower.sprite, TOWERS[tower.id].attackAnim, false);
     if (resolved.behaviour === "nova") {
       this.fireNova(index, resolved, target, enemies);
       this.lastVolleyCount = 0;
@@ -578,6 +590,7 @@ export class GameScene extends Phaser.Scene {
 
   private fireNova(index: number, resolved: ResolvedAttack, target: Enemy, enemies: Enemy[]): void {
     this.novas.spawn(target.x, target.y, resolved.novaRadius, Palette.coldBright);
+    this.spawnImpact(target.x, target.y, "frost-bolt", resolved.convertToCold);
     const n = collectInRadius(target.x, target.y, resolved.novaRadius, enemies, this.novaHits, 64);
     for (let i = 0; i < n; i++) {
       const e = this.novaHits[i];
@@ -602,6 +615,7 @@ export class GameScene extends Phaser.Scene {
       this.beams.spawn(x, y, current.x, current.y, tint, "spark-beam", 0.14);
       const nx = current.x;
       const ny = current.y;
+      this.spawnImpact(nx, ny, "spark-bolt", resolved.convertToCold);
       const killed = current.applyDamage(resolved.damage, resolved.convertToCold);
       if (killed) this.killEnemy(current, index);
       x = nx;
@@ -626,8 +640,16 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  private spawnImpact(x: number, y: number, texture: string, convertToCold = 0): void {
+    if (this.stressMode) return;
+    this.fx.spawn(x, y, impactAnimFor(texture, convertToCold), 16);
+  }
+
   private killEnemy(enemy: Enemy, ownerIndex: number): void {
     const reward = Math.round((enemy.def?.goldReward ?? 0) * (enemy.goldMult ?? 1));
+    const puffX = enemy.x;
+    const puffY = enemy.y;
+    const puffSize = enemy.def?.display ?? 24;
     const split = enemy.splitOnDeath && enemy.def && !this.stressMode;
     const splitDef = split ? enemy.def : null;
     const splitDist = enemy.dist;
@@ -637,6 +659,7 @@ export class GameScene extends Phaser.Scene {
     const idx = list.indexOf(enemy);
     if (idx >= 0) this.enemies.releaseAt(idx);
     else enemy.release();
+    if (!this.stressMode) this.fx.spawn(puffX, puffY, "death-puff", puffSize);
     if (splitDef && splitPath) {
       for (let s = 0; s < 2; s++) {
         const child = this.enemies.spawn(splitDef, {
@@ -808,7 +831,7 @@ export class GameScene extends Phaser.Scene {
         panel: this.panel.visible ? this.panel.rects() : null,
         battleHintOk: this.battleHint.visible ? this.battleHint.okRect : null,
         shopHelpOk: this.shopHint.visible ? this.shopHint.okRect : null,
-        shop: this.shop.visible ? { offers: this.shop.offerBuyRects, close: this.shop.closeRect } : null,
+        shop: this.shop.visible ? { offers: this.shop.offerBuyRects, close: this.shop.closeRect, panel: this.shop.panelRect } : null,
         spoilsTake: this.spoilsOverlay.visible ? this.spoilsOverlay.takeRect : null,
       }),
       socketByDef: (col: number, row: number, defId: string): boolean => {
@@ -853,6 +876,10 @@ export class GameScene extends Phaser.Scene {
       },
       shopOffers: () => this.shop.currentOffers,
       buyShop: (index: number) => this.shop.buy(index),
+      openShop: () => {
+        const runes = isFeatureUnlocked("runes", getProfile().highestDepthCleared);
+        this.shop.show(rollShopOffers(Math.random, { runes }), this.shopInfo(runes));
+      },
     };
     window.__towerForge = api;
   }

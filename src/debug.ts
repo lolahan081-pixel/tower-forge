@@ -22,7 +22,7 @@ export type UiRects = {
   shopHelpOk?: UiRect | null;
   latticeNodes?: Record<string, UiRect>;
   latticeView?: UiRect;
-  shop?: { offers: UiRect[]; close: UiRect } | null;
+  shop?: { offers: UiRect[]; close: UiRect; panel?: UiRect } | null;
   spoilsTake?: UiRect | null;
   forgeRelics?: UiRect[];
   forgeCurrencies?: UiRect[];
@@ -121,12 +121,14 @@ export type TowerForgeDebug = {
   collectSpoils?: () => void;
   giveRelic?: (defId?: string, rarity?: "normal" | "magic" | "rare") => unknown;
   giveCurrency?: (id: string, qty?: number) => void;
+  giveRune?: (id?: string) => unknown;
   givePoints?: (n?: number) => void;
   allocateNode?: (id: string) => unknown;
   latticeNodes?: Record<string, UiRect>;
   guaranteeDrop?: (kind?: "off" | "relic" | "rune" | "sigil" | "currency") => void;
   shopOffers?: () => unknown[];
   buyShop?: (index: number) => boolean;
+  openShop?: () => void;
   guaranteeRarity?: (rarity?: "off" | "normal" | "magic" | "rare" | "unique") => void;
   spawnModified?: (rarity?: "normal" | "magic" | "rare" | "unique") => unknown;
   setTimeScale?: (scale: number) => void;
