@@ -127,6 +127,10 @@ export function sanitizeProfile(raw: unknown): PlayerProfile {
     loadouts[id] = normalizeLoadout(id, (src as Record<string, unknown>)[key]);
   }
   const allocated = Array.isArray(rec.allocatedNodes) ? rec.allocatedNodes.filter((n) => typeof n === "string") : [];
+  const depth = typeof rec.highestDepthCleared === "number" ? Math.max(0, rec.highestDepthCleared) : 0;
+  const cleared = migrateClearedAtlas(depth, rec.clearedAtlasNodes);
+  const hasStarted = typeof rec.hasStarted === "boolean" ? rec.hasStarted : depth > 0 || cleared.length > 0;
+  const alreadyPlayed = hasStarted || depth > 0 || cleared.length > 0;
   return {
     version: PROFILE_VERSION,
     runeInventory: runes,
@@ -137,19 +141,13 @@ export function sanitizeProfile(raw: unknown): PlayerProfile {
     accountXp: typeof rec.accountXp === "number" ? Math.max(0, rec.accountXp) : 0,
     unspentPoints: typeof rec.unspentPoints === "number" ? Math.max(0, rec.unspentPoints) : 0,
     allocatedNodes: allocated,
-    highestDepthCleared: typeof rec.highestDepthCleared === "number" ? Math.max(0, rec.highestDepthCleared) : 0,
-    hasStarted: typeof rec.hasStarted === "boolean" ? rec.hasStarted : typeof rec.highestDepthCleared === "number" && rec.highestDepthCleared > 0,
-    seenUnlocks: migrateSeenUnlocks(
-      typeof rec.highestDepthCleared === "number" ? rec.highestDepthCleared : 0,
-      rec.seenUnlocks,
-    ),
-    // Missing flag on an old save means they have already played.
-    seenBattleHint: typeof rec.seenBattleHint === "boolean" ? rec.seenBattleHint : rec.seenUnlocks === undefined,
-    seenShopHint: typeof rec.seenShopHint === "boolean" ? rec.seenShopHint : rec.seenUnlocks === undefined,
-    clearedAtlasNodes: migrateClearedAtlas(
-      typeof rec.highestDepthCleared === "number" ? rec.highestDepthCleared : 0,
-      rec.clearedAtlasNodes,
-    ),
+    highestDepthCleared: depth,
+    hasStarted,
+    seenUnlocks: migrateSeenUnlocks(depth, rec.seenUnlocks),
+    // A missing flag on a save that has already played means they have seen the hint.
+    seenBattleHint: typeof rec.seenBattleHint === "boolean" ? rec.seenBattleHint : alreadyPlayed,
+    seenShopHint: typeof rec.seenShopHint === "boolean" ? rec.seenShopHint : alreadyPlayed,
+    clearedAtlasNodes: cleared,
   };
 }
 
@@ -184,6 +182,7 @@ export function loadProfile(): PlayerProfile {
     dedupeRuneInventory(profile);
     dedupeRelicInventory(profile);
     current = profile;
+    if (raw) persistProfile();
     return profile;
   } catch {
     current = createDefaultProfile();

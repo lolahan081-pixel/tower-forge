@@ -2,7 +2,7 @@ import Phaser from "phaser";
 import { GAME_HEIGHT, GAME_WIDTH } from "../data/map";
 import { Palette } from "../palette";
 import { UiButton } from "./UiButton";
-import { BTN_H, FONT_BODY, FONT_TITLE, setTreeInput, type UiRect } from "./ui";
+import { BTN_H, containsRect, FONT_BODY, FONT_TITLE, setTreeInput, type UiRect } from "./ui";
 
 const CARD_W = 640;
 const CARD_H = 380;
@@ -16,8 +16,11 @@ export class MessagePopup {
   private readonly ok: UiButton;
   readonly okRect: UiRect;
   private onOk: (() => void) | null = null;
+  private readonly sceneRef: Phaser.Scene;
+  private lockUntil = 0;
 
   constructor(scene: Phaser.Scene, depth = 90) {
+    this.sceneRef = scene;
     const cx = GAME_WIDTH / 2;
     const cy = GAME_HEIGHT / 2;
     const dim = scene.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, Palette.overlay, 0.82).setOrigin(0, 0).setInteractive();
@@ -79,11 +82,17 @@ export class MessagePopup {
     setTreeInput(this.root, false);
   }
 
-  handleTap(_x: number, _y: number): boolean {
-    return this.root.visible;
+  handleTap(x: number, y: number): boolean {
+    if (!this.root.visible) return false;
+    if (containsRect(this.okRect, x, y)) this.accept();
+    return true;
   }
 
   private accept(): void {
+    if (!this.root.visible) return;
+    const now = this.sceneRef.time.now;
+    if (now < this.lockUntil) return;
+    this.lockUntil = now + 220;
     const fn = this.onOk;
     this.hide();
     if (fn) fn();

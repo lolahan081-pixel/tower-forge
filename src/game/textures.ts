@@ -2,7 +2,10 @@ import Phaser from "phaser";
 import { Palette } from "../palette";
 
 /** Bake simple shape textures as fallbacks when the pixel atlas is missing a frame. */
+const BAKED_KEY = "tf-shapes-ready";
+
 export function generateTextures(scene: Phaser.Scene): void {
+  if (scene.textures.exists(BAKED_KEY)) return;
   const g = scene.make.graphics({ x: 0, y: 0 }, false);
 
   g.fillStyle(Palette.groundAlt, 1);
@@ -170,6 +173,11 @@ export function generateTextures(scene: Phaser.Scene): void {
   g.fillStyle(0xe8c547, 1);
   g.fillCircle(16, 21, 1.8);
   g.generateTexture("ui-lock", 32, 32);
+  g.clear();
+
+  g.fillStyle(0x000000, 0);
+  g.fillRect(0, 0, 2, 2);
+  g.generateTexture(BAKED_KEY, 2, 2);
   g.clear();
 
   g.destroy();

@@ -2,7 +2,7 @@ import Phaser from "phaser";
 import { GAME_HEIGHT, GAME_WIDTH } from "../data/map";
 import { Palette } from "../palette";
 import { UiButton } from "./UiButton";
-import { FONT_BODY, FONT_TITLE, setTreeInput, type UiRect } from "./ui";
+import { containsRect, FONT_BODY, FONT_TITLE, setTreeInput, type UiRect } from "./ui";
 
 const HELP_KEY = "tower-forge-help-seen";
 const CARD_W = 640;
@@ -107,8 +107,9 @@ export class HelpOverlay {
     }
   }
 
-  handleTap(_worldX: number, _worldY: number): void {
-    // The GOT IT button handles its own pointerup.
+  handleTap(worldX: number, worldY: number): void {
+    if (!this.root.visible) return;
+    if (containsRect(this.dismissRectValue, worldX, worldY)) this.dismiss();
   }
 
   dismiss(): void {

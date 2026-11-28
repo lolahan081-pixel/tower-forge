@@ -273,6 +273,16 @@ export class GameScene extends Phaser.Scene {
       this.cancelBuild();
     });
 
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.input.off("pointermove");
+      this.input.off("pointerdown");
+      this.input.keyboard?.off("keydown-ONE");
+      this.input.keyboard?.off("keydown-TWO");
+      this.input.keyboard?.off("keydown-SPACE");
+      this.input.keyboard?.off("keydown-ESC");
+      this.tweens.killAll();
+    });
+
     this.hud.refresh(this.hudArgs());
     this.exposeDebugHook();
     this.help.hide();
@@ -328,6 +338,14 @@ export class GameScene extends Phaser.Scene {
   }
 
   update(time: number, delta: number): void {
+    try {
+      this.stepUpdate(time, delta);
+    } catch (err) {
+      console.error("Tower Forge: GameScene update failed", err);
+    }
+  }
+
+  private stepUpdate(time: number, delta: number): void {
     const dtMs = delta * this.timeScale;
     const dtSec = dtMs * 0.001;
     const instantFps = this.game.loop.actualFps;
@@ -832,7 +850,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   private followGhost(x: number, y: number): void {
-    if (!this.selected || this.hud.isOverHud(y) || this.panel.visible || this.outcome !== "playing") {
+    if (!this.ghost?.active || !this.ghostRange?.active) return;
+    if (!this.selected || !this.hud || this.hud.isOverHud(y) || this.panel.visible || this.outcome !== "playing") {
       this.hideGhost();
       return;
     }
@@ -865,8 +884,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   private hideGhost(): void {
-    this.ghost.setVisible(false);
-    this.ghostRange.clear();
+    if (this.ghost?.active) this.ghost.setVisible(false);
+    if (this.ghostRange?.active) this.ghostRange.clear();
   }
 
   private layoutConfirm(col: number, row: number): void {

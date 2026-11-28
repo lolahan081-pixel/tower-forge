@@ -37,7 +37,9 @@ export function pointerWorld(scene: Phaser.Scene, pointer: Phaser.Input.Pointer)
  * stuck "down", so the next screen often ignores clicks. Defer one frame.
  */
 export function startScene(scene: Phaser.Scene, key: string, data?: object): void {
+  scene.tweens.killAll();
   scene.time.delayedCall(0, () => {
+    scene.tweens.killAll();
     scene.scene.start(key, data);
   });
 }
@@ -57,6 +59,7 @@ export function prepareSceneInput(scene: Phaser.Scene): void {
   scene.scale.on("resize", onResize);
   scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
     scene.scale.off("resize", onResize);
+    scene.tweens.killAll();
   });
 }
 

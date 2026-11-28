@@ -85,12 +85,15 @@ export function pendingUnlocks(highestDepthCleared: number, seen: readonly strin
  * clear depth as seen so they are not spammed with catch-up popups.
  */
 export function migrateSeenUnlocks(highestDepthCleared: number, rawSeen: unknown): string[] {
-  if (Array.isArray(rawSeen)) {
-    return rawSeen.filter((id): id is string => typeof id === "string" && isFeatureId(id));
-  }
-  const seen: string[] = [];
+  const implied: string[] = [];
   for (const id of FEATURE_IDS) {
-    if (isFeatureUnlocked(id, highestDepthCleared)) seen.push(id);
+    if (isFeatureUnlocked(id, highestDepthCleared)) implied.push(id);
   }
-  return seen;
+  if (Array.isArray(rawSeen)) {
+    const seen = rawSeen.filter((id): id is string => typeof id === "string" && isFeatureId(id));
+    // An empty list on a progressed save is an old/unmigrated file, not "show every popup".
+    if (seen.length > 0 || highestDepthCleared <= 0) return seen;
+    return implied;
+  }
+  return implied;
 }

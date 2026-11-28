@@ -2,7 +2,7 @@ import Phaser from "phaser";
 import { GAME_HEIGHT, GAME_WIDTH } from "../data/map";
 import { Palette } from "../palette";
 import { UiButton } from "./UiButton";
-import { BTN_H, FONT_BODY, FONT_TITLE, setTreeInput, type UiRect } from "./ui";
+import { BTN_H, containsRect, FONT_BODY, FONT_TITLE, setTreeInput, type UiRect } from "./ui";
 
 const CARD_W = 640;
 const CARD_H = 380;
@@ -67,7 +67,12 @@ export class BattleHint {
     setTreeInput(this.root, false);
   }
 
-  handleTap(_x: number, _y: number): boolean {
-    return this.root.visible;
+  handleTap(x: number, y: number): boolean {
+    if (!this.root.visible) return false;
+    if (containsRect(this.okRect, x, y)) {
+      this.hide();
+      this.onDismiss();
+    }
+    return true;
   }
 }

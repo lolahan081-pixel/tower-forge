@@ -9,7 +9,7 @@ import { HelpOverlay } from "./HelpOverlay";
 import { generateTextures } from "./textures";
 import { UiButton } from "./UiButton";
 import { UnlockPopup } from "./UnlockPopup";
-import { FONT_TITLE, prepareSceneInput, startScene } from "./ui";
+import { FONT_TITLE, pointerWorld, prepareSceneInput, startScene } from "./ui";
 
 type Ember = { dot: Phaser.GameObjects.Arc; vy: number; life: number; max: number; x: number };
 
@@ -121,9 +121,29 @@ export class MenuScene extends Phaser.Scene {
 
     this.exposeDebug();
     this.maybeShowUnlock();
+    this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+      if (pointer.rightButtonDown()) return;
+      const pt = pointerWorld(this, pointer);
+      if (this.unlocks.visible) {
+        this.unlocks.handleTap(pt.x, pt.y);
+        return;
+      }
+      if (this.help.visible) {
+        this.help.handleTap(pt.x, pt.y);
+        return;
+      }
+    });
   }
 
   update(_time: number, delta: number): void {
+    try {
+      this.stepEmbers(delta);
+    } catch (err) {
+      console.error("Tower Forge: MenuScene update failed", err);
+    }
+  }
+
+  private stepEmbers(delta: number): void {
     const dt = Math.min(0.05, delta * 0.001);
     for (let i = 0; i < this.embers.length; i++) {
       const e = this.embers[i];
