@@ -11,6 +11,7 @@ const HUD_Y = MAP_ROWS * TILE_SIZE;
 export class Hud {
   private readonly goldText: Phaser.GameObjects.Text;
   private readonly livesText: Phaser.GameObjects.Text;
+  private readonly depthText: Phaser.GameObjects.Text;
   private readonly waveText: Phaser.GameObjects.Text;
   private readonly startBtn: UiButton;
   private readonly inscribeBtn: UiButton;
@@ -24,8 +25,10 @@ export class Hud {
   readonly startRect: UiRect;
   readonly inscribeRect: UiRect;
   readonly returnRect: UiRect;
+  readonly nextRect: UiRect;
   readonly menuRect: UiRect;
   readonly menuEndRect: UiRect;
+  private readonly nextBtn: UiButton;
 
   constructor(
     scene: Phaser.Scene,
@@ -34,11 +37,13 @@ export class Hud {
     onInscribe: () => void,
     onReturn: () => void,
     onMenu: () => void,
+    onNext: () => void,
   ) {
     const style = { font: FONT_HUD, color: "#e8e0d4" };
     this.goldText = scene.add.text(16, HUD_Y + 6, "", style).setDepth(20);
     this.livesText = scene.add.text(200, HUD_Y + 6, "", style).setDepth(20);
-    this.waveText = scene.add.text(390, HUD_Y + 6, "", style).setDepth(20);
+    this.depthText = scene.add.text(390, HUD_Y + 6, "", style).setDepth(20);
+    this.waveText = scene.add.text(620, HUD_Y + 6, "", style).setDepth(20);
 
     const menuW = 160;
     this.menuRect = { x: 16, y: 8, w: menuW, h: BTN_H };
@@ -129,28 +134,44 @@ export class Hud {
       .setDepth(41)
       .setVisible(false);
 
-    const retW = 320;
-    const retX = (GAME_WIDTH - retW) / 2;
-    const retY = (GAME_HEIGHT - HUD_HEIGHT) / 2 + 80;
-    this.returnRect = { x: retX, y: retY, w: retW, h: BTN_H };
-    this.returnBtn = new UiButton(scene, {
-      x: retX,
-      y: retY,
-      w: retW,
+    const btnW = 280;
+    const endGap = 16;
+    const rowW = btnW * 2 + endGap;
+    const rowX = (GAME_WIDTH - rowW) / 2;
+    const rowY = (GAME_HEIGHT - HUD_HEIGHT) / 2 + 50;
+    this.nextRect = { x: rowX, y: rowY, w: btnW, h: BTN_H };
+    this.nextBtn = new UiButton(scene, {
+      x: rowX,
+      y: rowY,
+      w: btnW,
       h: BTN_H,
-      label: "RETURN TO BASTION",
+      label: "NEXT",
+      style: "emph",
+      depth: 42,
+      onClick: onNext,
+    });
+    this.nextBtn.setVisible(false);
+
+    this.returnRect = { x: rowX + btnW + endGap, y: rowY, w: btnW, h: BTN_H };
+    this.returnBtn = new UiButton(scene, {
+      x: this.returnRect.x,
+      y: rowY,
+      w: btnW,
+      h: BTN_H,
+      label: "BASTION",
       style: "emph",
       depth: 42,
       onClick: onReturn,
     });
     this.returnBtn.setVisible(false);
 
-    const menuEndY = retY + BTN_H + 12;
-    this.menuEndRect = { x: retX, y: menuEndY, w: retW, h: BTN_H };
+    const endMenuW = 280;
+    const menuEndY = rowY + BTN_H + 12;
+    this.menuEndRect = { x: (GAME_WIDTH - endMenuW) / 2, y: menuEndY, w: endMenuW, h: BTN_H };
     this.menuEndBtn = new UiButton(scene, {
-      x: retX,
+      x: this.menuEndRect.x,
       y: menuEndY,
-      w: retW,
+      w: endMenuW,
       h: BTN_H,
       label: "MAIN MENU",
       depth: 42,
@@ -169,9 +190,14 @@ export class Hud {
     outcome: "playing" | "won" | "lost";
     canStart: boolean;
     canInscribe: boolean;
+    depth: number;
+    difficulty: string;
+    pips: string;
+    canNext: boolean;
   }): void {
     this.goldText.setText(`Gold  ${args.gold}`);
     this.livesText.setText(`Lives  ${args.lives}`);
+    this.depthText.setText(`Depth ${args.depth}  ${args.pips}  ${args.difficulty}`);
     const waveLabel = args.waveNumber <= 0 ? `Wave  —  / ${args.waveTotal}` : `Wave  ${args.waveNumber}  / ${args.waveTotal}`;
     this.waveText.setText(waveLabel);
 
@@ -196,7 +222,13 @@ export class Hud {
       this.overlay.setVisible(false);
       this.overlayText.setVisible(false);
     }
+    const showNext = args.outcome === "won" && args.canNext;
+    this.nextBtn.setVisible(showNext);
     this.returnBtn.setVisible(ended);
+    this.returnBtn.setLabel(showNext ? "BASTION" : "RETURN TO BASTION");
+    const returnX = showNext ? this.nextRect.x + this.nextRect.w + 16 : (GAME_WIDTH - this.returnRect.w) / 2;
+    this.returnBtn.root.setX(returnX);
+    this.returnRect.x = returnX;
     this.menuEndBtn.setVisible(ended);
   }
 
@@ -209,12 +241,13 @@ export class Hud {
     return x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
   }
 
-  rects(): { startWave: UiRect; inscribe: UiRect; towers: Record<string, UiRect>; returnToBastion: UiRect; menuButton: UiRect; menuEnd: UiRect } {
+  rects(): { startWave: UiRect; inscribe: UiRect; towers: Record<string, UiRect>; returnToBastion: UiRect; next: UiRect | null; menuButton: UiRect; menuEnd: UiRect } {
     return {
       startWave: this.startRect,
       inscribe: this.inscribeRect,
       towers: this.towerRects,
       returnToBastion: this.returnRect,
+      next: this.nextBtn.root.visible ? this.nextRect : null,
       menuButton: this.menuRect,
       menuEnd: this.menuEndRect,
     };

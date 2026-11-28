@@ -8,7 +8,7 @@ import {
   isAtlasNodeUnlocked,
   type AtlasNodeDef,
 } from "../data/atlas";
-import { livesForDepth, pointsForClear } from "../data/depths";
+import { difficultyLabel, livesForDepth, pipText, pointsForClear } from "../data/depths";
 import { GAME_HEIGHT, GAME_WIDTH } from "../data/map";
 import { getMapLayout } from "../data/maps";
 import { getProfile } from "../data/profile";
@@ -29,6 +29,7 @@ type NodeView = {
   label: Phaser.GameObjects.Text;
   lock: Phaser.GameObjects.Image;
   caption: Phaser.GameObjects.Text;
+  fresh: Phaser.GameObjects.Text;
 };
 
 /**
@@ -45,6 +46,7 @@ export class AtlasPanel {
   private readonly enter: UiButton;
   private readonly close: UiButton;
   private readonly views: NodeView[] = [];
+  private freshlyOpened = new Set<string>();
   readonly nodeRects: Record<string, UiRect> = {};
   readonly enterRect: UiRect;
   readonly closeRect: UiRect;
@@ -96,6 +98,10 @@ export class AtlasPanel {
           wordWrap: { width: 120 },
         })
         .setOrigin(0.5, 0);
+      const fresh = scene.add
+        .text(def.x, def.y - 44, "NEW", { font: FONT_BTN_SM, color: "#e8c547" })
+        .setOrigin(0.5, 1)
+        .setVisible(false);
       const zone = scene.add.zone(def.x, def.y, NODE_R * 2, NODE_R * 2).setInteractive({ useHandCursor: true });
       zone.on("pointerup", (pointer: Phaser.Input.Pointer) => {
         if (pointer.rightButtonDown()) return;
@@ -103,8 +109,8 @@ export class AtlasPanel {
       });
       zone.on("pointerover", () => disc.setStrokeStyle(3, Palette.gold));
       zone.on("pointerout", () => this.refresh());
-      this.views.push({ def, rect, zone, disc, ring, label, lock, caption });
-      children.push(disc, ring, label, lock, caption, zone);
+      this.views.push({ def, rect, zone, disc, ring, label, lock, caption, fresh });
+      children.push(disc, ring, label, lock, caption, fresh, zone);
     }
 
     this.preview = scene.add.graphics();
@@ -155,14 +161,20 @@ export class AtlasPanel {
     return this.selected;
   }
 
-  show(): void {
+  show(focus?: string, newlyOpened?: readonly string[]): void {
     const cleared = getProfile().clearedAtlasNodes;
-    if (!isAtlasNodeUnlocked(this.selected, cleared)) this.selected = ATLAS_START_ID;
+    this.freshlyOpened = new Set(newlyOpened ?? []);
+    if (focus && isAtlasNodeUnlocked(focus, cleared)) this.selected = focus;
+    else if (!isAtlasNodeUnlocked(this.selected, cleared)) this.selected = ATLAS_START_ID;
     this.root.setVisible(true);
     this.enter.setVisible(true);
     this.close.setVisible(true);
     setTreeInput(this.root, true);
     this.refresh();
+  }
+
+  get freshlyOpenedIds(): string[] {
+    return [...this.freshlyOpened];
   }
 
   hide(): void {
@@ -218,7 +230,11 @@ export class AtlasPanel {
       view.caption.setColor(open ? "#e8e0d4" : "#5a5660");
       view.lock.setVisible(!open);
       view.label.setVisible(open);
-      view.ring.setVisible(on);
+      const isNew = open && !done && this.freshlyOpened.has(view.def.id);
+      view.fresh.setVisible(isNew);
+      view.ring.setVisible(on || isNew);
+      if (isNew && !on) view.ring.setStrokeStyle(2, Palette.goldDim);
+      else if (on) view.ring.setStrokeStyle(3, Palette.gold);
       if (view.zone.input) view.zone.input.cursor = "pointer";
     }
 
@@ -235,8 +251,8 @@ export class AtlasPanel {
     );
     this.infoMeta.setText(
       open
-        ? `Depth ${def.depth}    ·    Lives ${livesForDepth(def.depth)}    ·    Clear grants ${pts} lattice point${pts === 1 ? "" : "s"}${done ? "    ·    Cleared" : ""}`
-        : `Depth ${def.depth}  ·  locked`,
+        ? `Depth ${def.depth}  ·  ${pipText(def.depth)}  ${difficultyLabel(def.depth)}  ·  Lives ${livesForDepth(def.depth)}  ·  Clear grants ${pts} lattice point${pts === 1 ? "" : "s"}${done ? "  ·  Cleared" : ""}`
+        : `Depth ${def.depth}  ·  ${pipText(def.depth)}  ${difficultyLabel(def.depth)}  ·  locked`,
     );
     drawPathPreview(this.preview, layout, 560, 540, 200, 140);
     this.preview.setVisible(open);

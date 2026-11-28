@@ -14,6 +14,7 @@ import {
   unsocketRune,
 } from "../data/profile";
 import { getAtlasNode, isAtlasNodeId } from "../data/atlas";
+import { depthPreview } from "../data/depths";
 import { featureUnlockDepth, isFeatureUnlocked, pendingUnlocks, type FeatureId } from "../data/unlocks";
 import { makeRelic, relicDisplayName, relicRarityLabel, type RelicRarity } from "../data/relics";
 import { isRuneId, RUNES } from "../data/runes";
@@ -94,8 +95,21 @@ export class BastionScene extends Phaser.Scene {
   private invRunesMark!: Phaser.GameObjects.Rectangle;
   private invRelicsMark!: Phaser.GameObjects.Rectangle;
 
+  private pendingAtlas: { focus?: string; opened?: string[] } | null = null;
+
   constructor() {
     super("bastion");
+  }
+
+  init(data?: { openAtlas?: boolean; focusNodeId?: string; newlyOpened?: string[] }): void {
+    if (data?.openAtlas) {
+      const pending: { focus?: string; opened?: string[] } = {};
+      if (data.focusNodeId) pending.focus = data.focusNodeId;
+      if (data.newlyOpened) pending.opened = data.newlyOpened;
+      this.pendingAtlas = pending;
+    } else {
+      this.pendingAtlas = null;
+    }
   }
 
   create(): void {
@@ -248,7 +262,15 @@ export class BastionScene extends Phaser.Scene {
       this.unlocks.show(next);
     } else {
       this.setHubLive(true);
+      this.tryOpenPendingAtlas();
     }
+  }
+
+  private tryOpenPendingAtlas(): void {
+    const pending = this.pendingAtlas;
+    if (!pending) return;
+    this.pendingAtlas = null;
+    this.atlas.show(pending.focus, pending.opened);
   }
 
   private syncTabLocks(): void {
@@ -827,6 +849,7 @@ export class BastionScene extends Phaser.Scene {
             enter: this.atlas.enterRect,
             close: this.atlas.closeRect,
             selected: this.atlas.selectedId,
+            newlyOpened: this.atlas.freshlyOpenedIds,
           }
         : null,
       latticeNodes: this.lattice.nodeRects(),
@@ -907,7 +930,8 @@ export class BastionScene extends Phaser.Scene {
         if (this.atlas.visible) this.atlas.show();
         this.maybeShowUnlock();
       },
-      openAtlas: () => this.atlas.show(),
+      openAtlas: (focus?: string, newlyOpened?: string[]) => this.atlas.show(focus, newlyOpened),
+      previewDepth: (depth: number) => depthPreview(depth),
       enterAtlasNode: (id: string) => {
         if (!isAtlasNodeId(id)) return false;
         const node = getAtlasNode(id);

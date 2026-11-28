@@ -68,8 +68,9 @@ export function rollEnemyPack(depth: number, forced?: EnemyRarity): EnemyPack {
   else if (forced !== "normal") {
     const ch = modChance(depth);
     const roll = Math.random();
-    if (roll < ch.rare) rarity = "rare";
-    else if (roll < ch.rare + ch.magic) rarity = "magic";
+    if (roll < ch.unique) rarity = "unique";
+    else if (roll < ch.unique + ch.rare) rarity = "rare";
+    else if (roll < ch.unique + ch.rare + ch.magic) rarity = "magic";
   }
   if (rarity === "normal" || rarity === "unique") return { rarity, mods: [] };
   const count = rarity === "rare" ? (Math.random() < 0.5 ? 3 : 4) : Math.random() < 0.5 ? 1 : 2;
@@ -77,8 +78,16 @@ export function rollEnemyPack(depth: number, forced?: EnemyRarity): EnemyPack {
 }
 
 export function rarityGoldMult(rarity: EnemyRarity): number {
+  if (rarity === "unique") return 3;
   if (rarity === "rare") return 2.25;
   if (rarity === "magic") return 1.5;
+  return 1;
+}
+
+export function rarityHpMult(rarity: EnemyRarity): number {
+  if (rarity === "unique") return 3.2;
+  if (rarity === "rare") return 2.1;
+  if (rarity === "magic") return 1.35;
   return 1;
 }
 

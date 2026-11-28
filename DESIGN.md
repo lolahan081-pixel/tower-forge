@@ -15,7 +15,7 @@ The last fortress that still guards a gate against the Hollow mist. Dark fantasy
 
 ## Core loop
 
-Main menu (Start / Continue, Bastion, How to Play, Settings) → optionally prepare in the Bastion → open the Ember Atlas and pick a node → Enter Breach (~10 waves, Unique boss on the last) → place frames → optionally swap the Sigil → fight, shop between waves, auto-collect spoils → clear the node to unlock its neighbors, award account XP and Lattice points, unlock any new systems, take spoils into the stash. Menu is reachable from the hub and from a Breach.
+Main menu (Start / Continue, Bastion, How to Play, Settings) → optionally prepare in the Bastion → open the Ember Atlas and pick a node → Enter Breach (~10 waves, Unique boss on the last) → place frames → optionally swap the Sigil → fight, shop between waves, auto-collect spoils → clear the node to unlock its neighbors, award account XP and Lattice points, unlock any new systems, take spoils into the stash. After a win, Next returns to the Atlas with the newly opened road highlighted. Menu is reachable from the hub and from a Breach.
 
 ## Unlock order
 
@@ -34,10 +34,10 @@ Conditions and tutorial copy live in `src/data/unlocks.ts`. Existing saves inher
 - **Relics & affixes.** 1–2 slots per frame type. Bases have implicits. Normal / Magic (1 prefix + 1 suffix) / Rare (up to 3+3). Prefixes = damage, suffixes = utility. Affix tiers follow item level. Equipped Relics change resolved stats.
 - **Drops.** Enemies drop Relics, Sigils, Runes, and currency (weights in data; rares and the boss drop more). Locked types are omitted. Loot auto-collects into spoils, shown at the end of a Breach, then moves to the stash.
 - **Currency (fully random crafting).** Kindle Shard, Ash Mote, Crown Cinder, Sovereign Ember, Rift Salt, Null Ash, Blight Heart (corrupt, then locks), Unbinding Tear (Lattice respec). Used at the Ember Forge once it is open.
-- **Stash & Depth.** Stash lists all items, gems, and currency. Node Depth (1–10) scales lives, HP, counts, gold, and pack-mod chance. Early Depths (1–3) are relaxed. Clearing awards account XP and unspent Lattice points.
-- **Ember Atlas.** A small campaign graph (~12 nodes) over four map layouts (Cinder Approach, Riven Switchback, Twin Ash Roads, The Hollow Crown). Clearing a node unlocks its neighbors; Depth rises farther from the Ash Gate. Twin Ash Roads has two spawn paths that share a gate. Designed so a story layer can be added later.
+- **Stash & Depth.** Stash lists all items, gems, and currency. Node Depth (1–10) is data-driven: HP, counts, speed, wave density, elite chance, lives, starting gold, and boss HP. Depths 1–3 stay relaxed; the curve steps up at Depth 4 (Harsh), then Dire and Sovereign. Depth number and a difficulty mark appear on the Atlas card and the battle HUD. Clearing awards account XP and unspent Lattice points.
+- **Ember Atlas.** A 12-node campaign graph, each with its own path layout (short roads early; switchbacks, loops, crossing and multi-spawn paths later). Clearing a node unlocks its neighbors; Depth rises farther from the Ash Gate. The node card shows Depth, difficulty, and a path preview. Designed so a story layer can be added later.
 - **Ember Lattice.** ~40 nodes: Spire (projectile), Font (spell), Totem (aura, future-facing), and an economy center. Small nodes, notables, and three trade-off keystones (Ashen Volley, Sanguine Font, Crown of Cinders). Bind adjacent nodes with points. Bonuses are global or tag-scoped.
-- **Enemy rarity.** After Depth 3: Normal / Magic (1–2 mods) / Rare (3–4, ember outline) / Unique boss (Hollow Sovereign). Mods: Fleet Ash, Cinder Hide, Rime Hide, Slag Plate, Smoldering, Cinder Split, Ward Shell, Haste Paean, Close Ward.
+- **Enemy rarity.** After Depth 3: Normal / Magic (1–2 mods) / Rare (3–4, ember outline) / Unique packs at later Depths, plus the Unique boss (Hollow Sovereign) on wave 10. Mods: Fleet Ash, Cinder Hide, Rime Hide, Slag Plate, Smoldering, Cinder Split, Ward Shell, Haste Paean, Close Ward.
 
 ## Out of scope / deferred
 

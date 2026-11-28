@@ -2,9 +2,9 @@ import Phaser from "phaser";
 import { ENEMIES, type EnemyId } from "../data/enemies";
 import { makeGem, type GemInstance } from "../data/items";
 import { allowedDropsFor, rollKillDrops, type SpoilsItem } from "../data/drops";
-import { buildBreachWaves, goldScale, hpScale, livesForDepth, speedScale } from "../data/depths";
-import { rarityGoldMult, rollEnemyPack, type EnemyRarity } from "../data/enemyMods";
-import { ATLAS_START_ID, getAtlasNode, isAtlasNodeId } from "../data/atlas";
+import { buildBreachWaves, bossHpScale, difficultyLabel, goldScale, hpScale, livesForDepth, pipText, speedScale, startingGoldForDepth, depthPreview } from "../data/depths";
+import { rarityGoldMult, rarityHpMult, rollEnemyPack, type EnemyRarity } from "../data/enemyMods";
+import { ATLAS_START_ID, getAtlasNode, isAtlasNodeId, newlyUnlockedNeighbors, nextAtlasTarget } from "../data/atlas";
 import { getMapLayout, isMapLayoutId, type MapLayout } from "../data/maps";
 import { awardBreachClear, collectSpoils, getProfile, markBattleHintSeen, markShopHintSeen, persistProfile, setHighestDepthCleared } from "../data/profile";
 import { isFeatureUnlocked } from "../data/unlocks";
@@ -146,6 +146,9 @@ export class GameScene extends Phaser.Scene {
       () => {
         this.returnToMenu();
       },
+      () => {
+        this.returnToAtlas();
+      },
     );
 
     this.help = new HelpOverlay(this, () => {
@@ -248,7 +251,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private resetBattleState(): void {
-    this.gold = STARTING_GOLD;
+    this.gold = startingGoldForDepth(this.depth);
     this.lives = livesForDepth(this.depth);
     this.outcome = "playing";
     this.selected = "ember-spire";
@@ -271,6 +274,16 @@ export class GameScene extends Phaser.Scene {
     this.spoils = [];
     persistProfile();
     startScene(this, "bastion");
+  }
+
+  private returnToAtlas(): void {
+    if (this.spoils.length > 0) collectSpoils(this.spoils);
+    this.spoils = [];
+    persistProfile();
+    const cleared = getProfile().clearedAtlasNodes;
+    const next = nextAtlasTarget(cleared, this.atlasNodeId);
+    const opened = newlyUnlockedNeighbors(this.atlasNodeId, cleared);
+    startScene(this, "bastion", { openAtlas: true, focusNodeId: next ?? this.atlasNodeId, newlyOpened: opened });
   }
 
   private returnToMenu(): void {
@@ -494,7 +507,7 @@ export class GameScene extends Phaser.Scene {
           : rollEnemyPack(this.depth, forced ?? (this.forceRarity === "off" ? undefined : this.forceRarity));
     const path = this.nextRoute();
     this.enemies.spawn(ENEMIES[id], {
-      hpMult: hpScale(this.depth),
+      hpMult: id === "hollow-sovereign" ? bossHpScale(this.depth) : hpScale(this.depth) * rarityHpMult(pack.rarity),
       speedMult: speedScale(this.depth),
       goldMult: goldScale(this.depth) * rarityGoldMult(pack.rarity),
       rarity: pack.rarity,
@@ -753,6 +766,10 @@ export class GameScene extends Phaser.Scene {
       outcome: this.outcome,
       canStart: this.waves.canStart(),
       canInscribe: this.towers.length > 0 && this.outcome === "playing",
+      depth: this.depth,
+      difficulty: difficultyLabel(this.depth),
+      pips: pipText(this.depth),
+      canNext: this.outcome === "won" && nextAtlasTarget(getProfile().clearedAtlasNodes, this.atlasNodeId) !== null,
     };
   }
 
@@ -777,6 +794,8 @@ export class GameScene extends Phaser.Scene {
       layoutId: this.layout.id,
       mapName: this.layout.name,
       atlasNodeId: this.atlasNodeId,
+      depth: this.depth,
+      mapFlavor: this.layout.flavor,
       inventory: getProfile().sigilInventory.map(snapGem),
       towerSockets: this.towers.map((t) => ({
         col: t.col,
@@ -876,6 +895,13 @@ export class GameScene extends Phaser.Scene {
       },
       shopOffers: () => this.shop.currentOffers,
       buyShop: (index: number) => this.shop.buy(index),
+      previewDepth: (depth: number) => depthPreview(depth),
+      enterAtlasNode: (id: string) => {
+        if (!isAtlasNodeId(id)) return false;
+        const node = getAtlasNode(id);
+        startScene(this, "game", { depth: node.depth, layoutId: node.layoutId, atlasNodeId: node.id });
+        return true;
+      },
       openShop: () => {
         const runes = isFeatureUnlocked("runes", getProfile().highestDepthCleared);
         this.shop.show(rollShopOffers(Math.random, { runes }), this.shopInfo(runes));

@@ -18,7 +18,8 @@ export type UiRects = {
   tabStash?: UiRect;
   tabForge?: UiRect;
   depthSelect?: { depths: UiRect[]; enter: UiRect; close: UiRect } | null;
-  atlas?: { nodes: Record<string, UiRect>; enter: UiRect; close: UiRect; selected: string } | null;
+  atlas?: { nodes: Record<string, UiRect>; enter: UiRect; close: UiRect; selected: string; newlyOpened?: string[] } | null;
+  next?: UiRect | null;
   shopHelpOk?: UiRect | null;
   latticeNodes?: Record<string, UiRect>;
   latticeView?: UiRect;
@@ -86,6 +87,8 @@ export type GameSnapshot = {
   layoutId?: string;
   mapName?: string;
   atlasNodeId?: string;
+  depth?: number;
+  mapFlavor?: string;
   inventory: GemSnap[];
   towerSockets: {
     col: number;
@@ -138,6 +141,7 @@ export type TowerForgeDebug = {
   markHasStarted?: () => void;
   openAtlas?: () => void;
   enterAtlasNode?: (id: string) => boolean;
+  previewDepth?: (depth: number) => unknown;
 };
 
 declare global {

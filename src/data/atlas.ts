@@ -29,7 +29,7 @@ function node(
 
 /**
  * A small campaign atlas. Clearing a node unlocks its neighbors.
- * Depth rises farther from the start. Layouts are reused at later tiers.
+ * Depth rises farther from the start. Each node has its own path layout.
  * Story hooks can be added later without changing the graph shape.
  */
 export const ATLAS_NODES: Record<string, AtlasNodeDef> = {
@@ -45,17 +45,17 @@ export const ATLAS_NODES: Record<string, AtlasNodeDef> = {
   ),
   "ember-cut": node(
     "ember-cut",
-    "cinder-approach",
+    "kindling-lane",
     2,
     200,
     300,
     "Ember Cut",
-    "A narrower cut of the same old road, already warming under the mist.",
+    "A higher lane, already warming under the mist. The drop comes late.",
     ["ash-gate", "riven-ford"],
   ),
   "riven-ford": node(
     "riven-ford",
-    "riven-switchback",
+    "ford-of-shards",
     3,
     320,
     300,
@@ -65,7 +65,7 @@ export const ATLAS_NODES: Record<string, AtlasNodeDef> = {
   ),
   "slag-ditch": node(
     "slag-ditch",
-    "riven-switchback",
+    "slag-ditch",
     4,
     440,
     150,
@@ -85,27 +85,27 @@ export const ATLAS_NODES: Record<string, AtlasNodeDef> = {
   ),
   "cinder-fall": node(
     "cinder-fall",
-    "cinder-approach",
+    "ash-cataract",
     5,
     560,
     150,
     "Cinder Fall",
-    "The old approach again, steeper and closer to the gate's fire.",
+    "The road falls in shelves of cinder, steeper and closer to the gate's fire.",
     ["slag-ditch", "ashen-spine"],
   ),
   "split-crown": node(
     "split-crown",
-    "twin-ash-roads",
+    "forked-circlet",
     5,
     560,
     450,
     "Split Crown",
-    "The twin roads tighten. The mist walks them in step.",
+    "Two roads cross at the heart of the field, then part, then meet.",
     ["twin-march", "ashen-spine"],
   ),
   "ashen-spine": node(
     "ashen-spine",
-    "hollow-crown",
+    "ashen-spine",
     6,
     680,
     150,
@@ -115,42 +115,42 @@ export const ATLAS_NODES: Record<string, AtlasNodeDef> = {
   ),
   "hollow-stair": node(
     "hollow-stair",
-    "hollow-crown",
+    "hollow-stair",
     7,
     830,
     150,
     "Hollow Stair",
-    "The crown's inner stair. Every turn is another approach to the same gate.",
+    "A stepped climb from the lower ash. Every landing is another hold.",
     ["ashen-spine", "mist-crown"],
   ),
   "mist-crown": node(
     "mist-crown",
-    "riven-switchback",
+    "veil-switch",
     8,
     760,
     450,
     "Mist Crown",
-    "The switchback returns, now drowned in a thicker mist.",
+    "A long switchback drowned in mist, and a second column that joins it late.",
     ["hollow-stair", "sovereign-gate"],
   ),
   "sovereign-gate": node(
     "sovereign-gate",
-    "hollow-crown",
+    "named-circuit",
     9,
     900,
     250,
     "Sovereign Gate",
-    "A long circuit under a name that was once a king's.",
+    "A long inner circuit under a name that was once a king's, plus a midland spawn.",
     ["mist-crown", "last-watch"],
   ),
   "last-watch": node(
     "last-watch",
-    "twin-ash-roads",
+    "final-watch",
     10,
     900,
     430,
     "Last Watch",
-    "The farthest node on this Atlas. Two roads, one ending, no further path.",
+    "The farthest node on this Atlas. Three roads, one ending, no further path.",
     ["sovereign-gate"],
   ),
 };
@@ -205,4 +205,38 @@ export function migrateClearedAtlas(highestDepthCleared: number, raw: unknown): 
     return raw.filter((id): id is string => typeof id === "string" && isAtlasNodeId(id));
   }
   return atlasNodesClearedByDepth(highestDepthCleared);
+}
+
+/** Prefer an unlocked, uncleared neighbor of `fromId`; otherwise the nearest such node on the Atlas. */
+export function nextAtlasTarget(cleared: readonly string[], fromId?: string): AtlasNodeId | null {
+  const pick = (ids: readonly string[]): AtlasNodeDef | null => {
+    const found: AtlasNodeDef[] = [];
+    for (const id of ids) {
+      if (!isAtlasNodeUnlocked(id, cleared) || isAtlasNodeCleared(id, cleared)) continue;
+      const def = ATLAS_NODES[id];
+      if (def) found.push(def);
+    }
+    found.sort((a, b) => a.depth - b.depth || a.name.localeCompare(b.name));
+    return found[0] ?? null;
+  };
+  if (fromId) {
+    const def = ATLAS_NODES[fromId];
+    if (def) {
+      const local = pick(def.neighbors);
+      if (local) return local.id;
+    }
+  }
+  return pick(ATLAS_NODE_IDS)?.id ?? null;
+}
+
+/** Neighbors that became reachable because `clearedId` is now cleared. */
+export function newlyUnlockedNeighbors(clearedId: string, cleared: readonly string[]): string[] {
+  const def = ATLAS_NODES[clearedId];
+  if (!def) return [];
+  const out: string[] = [];
+  for (const id of def.neighbors) {
+    if (isAtlasNodeCleared(id, cleared)) continue;
+    if (isAtlasNodeUnlocked(id, cleared)) out.push(id);
+  }
+  return out;
 }
